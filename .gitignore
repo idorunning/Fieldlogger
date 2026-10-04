@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.next/
+.wrangler/
+.sites-runtime/
+.env*
+!.env.example
+*.tsbuildinfo
+android/.gradle/
+android/app/build/
+android/local.properties
+*.jks
+*.keystore
+
+__pycache__/
+*.pyc
