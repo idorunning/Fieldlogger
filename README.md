@@ -62,7 +62,7 @@ The browser acceptance test uses Playwright and `/usr/bin/chromium`, a disposabl
 
 Server secrets belong in ignored local environment files through approved secure setup, and in hosting secret configuration for deployment. No provider key belongs in browser JavaScript. Optional variable names are documented in `.env.example`; it contains no secrets.
 
-The existing private Site is `appgprj_6ac2d981043081919ee03d9ff57bf87e`; reuse `.openai/hosting.json`. Do not register a replacement. Logical storage bindings are `DB` and `BUCKET`. Production build emits `dist/server/index.js`, `dist/client`, and `dist/.openai` for hosting metadata, and `dist/drizzle` for migrations. The deployment archive puts the latter two at `.openai/` and `drizzle/` at its root.
+The existing Site is `appgprj_6ac2d981043081919ee03d9ff57bf87e`; reuse `.openai/hosting.json`. Do not register a replacement. The website is publicly reachable, with account-scoped Field Logger login protecting journal data and saved keys. Logical storage bindings are `DB` and `BUCKET`. Production build emits `dist/server/index.js`, `dist/client`, and `dist/.openai` for hosting metadata, and `dist/drizzle` for migrations. The deployment archive puts the latter two at `.openai/` and `drizzle/` at its root.
 
 The Sites skill's local helper scripts were not installed in this environment. SEBP source was retrieved over its authenticated source repository and used as a retained build scaffold. Publication uses an exact-source push and validated build archive followed by native Sites deployment. Registration alone is not a live URL; check the native deployment result for the published status.
 

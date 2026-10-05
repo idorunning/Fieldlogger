@@ -9,7 +9,8 @@ export async function keyStatus(userId: string) {
     .first<{ updated_at: string }>();
   return {
     hasKey: !!row,
-    serverKey: !!bindings().OPENAI_API_KEY,
+    // Keep older clients compatible; identification is always account-scoped.
+    serverKey: false,
     canSave: !!bindings().API_KEY_ENCRYPTION_KEY,
     updatedAt: row?.updated_at || null,
   };
@@ -19,7 +20,7 @@ export async function getAccountKey(userId: string) {
     .prepare("SELECT envelope FROM account_keys WHERE user_id=?")
     .bind(userId)
     .first<{ envelope: string }>();
-  if (!row) return bindings().OPENAI_API_KEY || null;
+  if (!row) return null;
   const secret = bindings().API_KEY_ENCRYPTION_KEY;
   if (!secret) throw new Error("Key storage is unavailable.");
   return unsealKey(row.envelope, userId, secret);

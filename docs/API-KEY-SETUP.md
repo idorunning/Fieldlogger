@@ -6,13 +6,13 @@ Keys that expire after 20 minutes are useful for a short test, but they remain c
 
 ## Storage and access
 
-- The app-owned HttpOnly session is required for every settings operation. Writes and tests additionally require the exact same Origin. The deployed Site is owner-private.
+- The app-owned HttpOnly session is required for every settings operation. Writes and tests additionally require the exact same Origin. The website uses Field Logger password login; journal data and saved credentials belong only to their account.
 - Keys are submitted over the Site's HTTPS endpoint, then encrypted with AES-256-GCM and a fresh 96-bit nonce before the D1 write. The user ID and envelope version are authenticated encryption context, preventing copying an encrypted key between accounts.
 - `API_KEY_ENCRYPTION_KEY` is a base64-encoded random 32-byte server-only Sites secret. It is not the OpenAI key. It must never be committed or exposed via public variable prefixes, frontend code, runtime responses or logs. Do not replace it without migrating existing encrypted records; doing so makes them unreadable.
 - Credentials are decrypted only in server memory for requests to the fixed OpenAI API origin. Client GET responses report presence and update time only, never key material or key fragments.
 - The key field clears before submission, uses password masking, and has autocomplete, capitalization and spelling assistance disabled. No app code persists a key to browser storage, URLs, analytics, journal exports or logs. API responses are excluded from service-worker caches.
 - Removing a key deletes its active database record. Normal hosting database backup retention still applies. Remove/revoke it at OpenAI to invalidate any previous copy.
-- A saved account key overrides an optional server `OPENAI_API_KEY`. With no saved key, the optional server key is used. No fallback to a different key occurs after an expired/rejected account key.
+- Identification uses only the authenticated account's saved key. No shared server key is used. An absent key pauses identification; an expired or rejected key requires replacement in settings.
 
 ## Local verification
 
@@ -26,4 +26,4 @@ python tests/key-settings.browser.py
 python tests/browser.py
 ```
 
-The test files contain explicitly fake credentials and never call OpenAI. Test connection and an actual identification must still be exercised with the user's real key through the private app.
+The test files contain explicitly fake credentials and never call OpenAI. Test connection and an actual identification require the user's real key saved through their signed-in settings.

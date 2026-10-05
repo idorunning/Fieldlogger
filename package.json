@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "test": "tsx --test tests/*.test.ts",
-    "android:sync": "cap sync android"
+    "android:build": "python scripts/build-android.py"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",

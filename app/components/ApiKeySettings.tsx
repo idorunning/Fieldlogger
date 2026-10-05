@@ -3,7 +3,6 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { KeyRound, LoaderCircle, ShieldCheck, Trash2 } from "lucide-react";
 type Status = {
   hasKey: boolean;
-  serverKey: boolean;
   canSave: boolean;
   updatedAt: string | null;
 };
@@ -133,9 +132,7 @@ export default function ApiKeySettings({
         <p className="small muted">
           {status.hasKey
             ? `A key is saved · updated ${new Date(status.updatedAt!).toLocaleString("en-GB")}.`
-            : status.serverKey
-              ? "A server connection is already configured. Your own key can override it."
-              : "No API key saved yet."}{" "}
+            : "No API key saved yet."}{" "}
           Saving a key does not verify its permissions or expiry.
         </p>
       )}
@@ -184,7 +181,7 @@ export default function ApiKeySettings({
           type="button"
           className="button secondary"
           onClick={test}
-          disabled={!online || busy || !(status?.hasKey || status?.serverKey)}
+          disabled={!online || busy || !status?.hasKey}
         >
           Test connection
         </button>
@@ -203,9 +200,7 @@ export default function ApiKeySettings({
         <div className="notice">
           <p>
             Remove your saved key? This does not revoke it at OpenAI.{" "}
-            {status?.serverKey
-              ? "The app will use its server connection instead."
-              : "Identification will pause until you add another key."}
+            Identification will pause until you add another key.
           </p>
           <button
             className="button secondary"

@@ -153,7 +153,7 @@ async function handle(request: Request) {
       const saved = viewer ? await keyStatus(viewer.id) : null;
       return json({
         storage: !!bindings().DB && !!bindings().BUCKET,
-        identification: !!bindings().OPENAI_API_KEY || !!saved?.hasKey,
+        identification: !!saved?.hasKey,
         plantnet: !!bindings().PLANTNET_API_KEY,
         bioclip: !!bindings().BIOCLIP_URL,
       });
