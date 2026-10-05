@@ -145,4 +145,27 @@ public class LauncherActivityTest {
       assertTrue(hasText(root, "Your field journal"));
     }
   }
+
+  @Test
+  public void appLinksLeavePrivacyAndSharingRulesInTheBrowser() {
+    android.content.pm.PackageManager pm = RuntimeEnvironment.getApplication().getPackageManager();
+    for (String path : new String[] {"/", "/invite?token=test"}) {
+      Intent intent =
+          new Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://fieldlogger.co.uk" + path))
+              .addCategory(Intent.CATEGORY_BROWSABLE)
+              .addCategory(Intent.CATEGORY_DEFAULT);
+      assertTrue(
+          pm.queryIntentActivities(intent, 0).stream()
+              .anyMatch(r -> r.activityInfo.name.equals(LauncherActivity.class.getName())));
+    }
+    for (String path : new String[] {"/privacy", "/community-rules", "/delete-account"}) {
+      Intent intent =
+          new Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://fieldlogger.co.uk" + path))
+              .addCategory(Intent.CATEGORY_BROWSABLE)
+              .addCategory(Intent.CATEGORY_DEFAULT);
+      assertFalse(
+          pm.queryIntentActivities(intent, 0).stream()
+              .anyMatch(r -> r.activityInfo.name.equals(LauncherActivity.class.getName())));
+    }
+  }
 }

@@ -323,22 +323,26 @@ public final class CommunityActivity extends AppCompatActivity {
       tab.setFocusable(true);
       tab.setOnClickListener(
           v -> {
-            if (n == 0) finish();
+            if (n == 0) journalPage("journal");
             if (n == 1) showMap();
             if (n == 2) {
-              startActivity(new Intent(this, LauncherActivity.class).putExtra("view", "camera"));
-              finish();
+              journalPage("camera");
             }
             if (n == 3 || n == 4) {
-              startActivity(
-                  new Intent(this, LauncherActivity.class)
-                      .putExtra("view", n == 3 ? "collection" : "achievements"));
-              finish();
+              journalPage(n == 3 ? "collection" : "achievements");
             }
           });
       nav.addView(tab, new LinearLayout.LayoutParams(0, dp(76), 1));
     }
     shell.addView(nav);
+  }
+
+  private void journalPage(String destination) {
+    startActivity(
+        new Intent(this, LauncherActivity.class)
+            .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            .putExtra("view", destination));
+    finish();
   }
 
   private LinearLayout page(String next, String heading, String subtitle) {

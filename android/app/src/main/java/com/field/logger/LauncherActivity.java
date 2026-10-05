@@ -181,7 +181,8 @@ public final class LauncherActivity extends AppCompatActivity {
   private void handleLink(Intent intent) {
     String nativeView = intent.getStringExtra("view");
     String observationId = intent.getStringExtra("observation_id");
-    if ("camera".equals(nativeView)) openCamera();
+    if ("journal".equals(nativeView)) showJournal();
+    else if ("camera".equals(nativeView)) openCamera();
     else if ("login".equals(nativeView)) showLogin(false);
     else if ("collection".equals(nativeView)) showCollection();
     else if ("achievements".equals(nativeView)) showMilestones();
@@ -189,6 +190,8 @@ public final class LauncherActivity extends AppCompatActivity {
       Observation selected = repo.db.find(observationId);
       if (selected != null && selected.owner.equals(repo.owner())) showDetail(selected);
     }
+    if (!"login".equals(nativeView)) intent.removeExtra("view");
+    intent.removeExtra("observation_id");
     Uri uri = intent.getData();
     if (uri != null
         && "fieldlogger.co.uk".equals(uri.getHost())
@@ -789,6 +792,7 @@ public final class LauncherActivity extends AppCompatActivity {
         v -> {
           Observation updated = repo.db.toggleFlag(record.id(), repo.owner(), "checkLater");
           if (updated != null) {
+            Observation.put(record.data, "checkLater", updated.data.optBoolean("checkLater"));
             later.setText(
                 updated.data.optBoolean("checkLater") ? "Saved for later" : "Check out later");
             repo.enqueue();
@@ -1298,6 +1302,8 @@ public final class LauncherActivity extends AppCompatActivity {
         v -> {
           Observation changed = repo.db.toggleFlag(record.id(), repo.owner(), "acorned");
           if (changed == null) return;
+          Observation.put(record.data, "acorned", changed.data.optBoolean("acorned"));
+          Observation.put(record.data, "acornCount", changed.data.optInt("acornCount"));
           button.update(changed.data.optBoolean("acorned"), changed.data.optInt("acornCount"));
           button.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
           repo.enqueue();

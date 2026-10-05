@@ -104,4 +104,18 @@ public class CommunityActivityTest {
     assertTrue(info.isChecked());
     assertTrue(b.getMinimumHeight() >= 48 * c.getResources().getDisplayMetrics().density);
   }
+
+  @Test
+  public void journalTabReturnsToExistingNativeJournal() {
+    try (ActivityController<CommunityActivity> controller =
+        Robolectric.buildActivity(CommunityActivity.class).setup()) {
+      CommunityActivity activity = controller.get();
+      find(activity.getWindow().getDecorView(), "Journal").performClick();
+      Intent intent = Shadows.shadowOf(activity).getNextStartedActivity();
+      assertEquals("journal", intent.getStringExtra("view"));
+      assertEquals(LauncherActivity.class.getName(), intent.getComponent().getClassName());
+      assertTrue((intent.getFlags() & Intent.FLAG_ACTIVITY_CLEAR_TOP) != 0);
+      assertTrue(activity.isFinishing());
+    }
+  }
 }
