@@ -29,6 +29,67 @@ public final class IconView extends View {
     paint.setStrokeCap(Paint.Cap.ROUND);
     paint.setStrokeJoin(Paint.Join.ROUND);
     switch (icon) {
+      case "acorn":
+      case "acorn-filled":
+        boolean filled = icon.equals("acorn-filled");
+        Path nut = new Path();
+        nut.moveTo(6, 10);
+        nut.lineTo(18, 10);
+        nut.lineTo(18, 14);
+        nut.cubicTo(18, 18, 14, 20, 12, 22);
+        nut.cubicTo(10, 20, 6, 18, 6, 14);
+        nut.close();
+        if (filled) {
+          paint.setStyle(Paint.Style.FILL);
+          paint.setColor(0xffd49b42);
+          canvas.drawPath(nut, paint);
+        }
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setColor(color);
+        canvas.drawPath(nut, paint);
+        Path cap = new Path();
+        cap.moveTo(4, 10);
+        cap.cubicTo(4, 1, 20, 1, 20, 10);
+        cap.close();
+        if (filled) {
+          paint.setStyle(Paint.Style.FILL);
+          paint.setColor(color);
+        }
+        canvas.drawPath(cap, paint);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setColor(color);
+        line(canvas, 12, 3, 13, 0);
+        line(canvas, 6, 7, 18, 7);
+        break;
+      case "expand":
+        line(canvas, 3, 9, 3, 3);
+        line(canvas, 3, 3, 9, 3);
+        line(canvas, 15, 3, 21, 3);
+        line(canvas, 21, 3, 21, 9);
+        line(canvas, 3, 15, 3, 21);
+        line(canvas, 3, 21, 9, 21);
+        line(canvas, 15, 21, 21, 21);
+        line(canvas, 21, 21, 21, 15);
+        break;
+      case "flag":
+        line(canvas, 5, 23, 5, 2);
+        line(canvas, 5, 2, 19, 2);
+        line(canvas, 19, 2, 16, 7);
+        line(canvas, 16, 7, 19, 12);
+        line(canvas, 19, 12, 5, 12);
+        break;
+      case "bookmark":
+      case "bookmark-filled":
+        Path bookmark = new Path();
+        bookmark.moveTo(6, 3);
+        bookmark.lineTo(18, 3);
+        bookmark.lineTo(18, 22);
+        bookmark.lineTo(12, 17);
+        bookmark.lineTo(6, 22);
+        bookmark.close();
+        if (icon.equals("bookmark-filled")) paint.setStyle(Paint.Style.FILL);
+        canvas.drawPath(bookmark, paint);
+        break;
       case "camera":
         rounded(canvas, 3, 6, 21, 20, 2);
         line(canvas, 7, 6, 9, 3);

@@ -77,6 +77,13 @@ public class StoreScreenshotsTest {
       Observation.put(data, "category", example[3]);
       Observation.put(data, "place", "Example woodland");
       Observation.put(data, "confirmed", true);
+      Observation.put(
+          data,
+          "latitude",
+          51.75 + (example[0].equals("fox") ? 0.004 : example[0].equals("woodland") ? -0.004 : 0));
+      Observation.put(data, "longitude", -1.25 + (example[0].equals("woodland") ? 0.003 : 0));
+      Observation.put(data, "acorned", example[0].equals("robin"));
+      Observation.put(data, "acornCount", example[0].equals("robin") ? 1 : 0);
       Observation.put(data, "analysisState", "complete");
       Observation.put(data, "note", "Example journal entry · licensed demonstration photograph.");
       JSONObject ai = new JSONObject();
@@ -86,7 +93,7 @@ public class StoreScreenshotsTest {
           "summary",
           example[0].equals("robin")
               ? "A small songbird with a bright orange breast, often seen around woodland edges and"
-                    + " gardens."
+                  + " gardens."
               : "A moment from the woodland, saved in my trail journal.");
       Observation.put(
           ai,
@@ -123,6 +130,25 @@ public class StoreScreenshotsTest {
       invoke(app, "showMilestones");
       render(app, "04-milestones.png");
     }
+    android.net.ConnectivityManager cm =
+        (android.net.ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+    Shadows.shadowOf(cm)
+        .setActiveNetworkInfo(
+            org.robolectric.shadows.ShadowNetworkInfo.newInstance(
+                android.net.NetworkInfo.DetailedState.CONNECTED,
+                android.net.ConnectivityManager.TYPE_WIFI,
+                0,
+                true,
+                true));
+    try (ActivityController<CommunityActivity> controller =
+        Robolectric.buildActivity(CommunityActivity.class).setup().visible()) {
+      CommunityActivity app = controller.get();
+      render(app, "07-discovery-map.png");
+      Method list = CommunityActivity.class.getDeclaredMethod("showMapList");
+      list.setAccessible(true);
+      list.invoke(app);
+      render(app, "08-map-discoveries.png");
+    }
   }
 
   private ScrollView findScroll(View view) {
@@ -143,10 +169,10 @@ public class StoreScreenshotsTest {
     m.invoke(app);
   }
 
-  private void render(LauncherActivity app, String name) throws Exception {
+  private void render(android.app.Activity app, String name) throws Exception {
     View view = app.findViewById(android.R.id.content);
     int width = 1080, height = 1920;
-    for (int i = 0; i < 35; i++) {
+    for (int i = 0; i < (name.equals("07-discovery-map.png") ? 250 : 35); i++) {
       Shadows.shadowOf(Looper.getMainLooper()).idle();
       view.measure(
           View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),

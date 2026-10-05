@@ -66,6 +66,10 @@ export type Observation = {
   syncState: "pending" | "synced" | "error";
   analysisState: "pending" | "complete" | "error";
   archived?: boolean;
+  acorned?: boolean;
+  acornCount?: number;
+  checkLater?: boolean;
+  publication?: {status:string;audience:string|null;reason:string};
   error?: string;
   updatedAt: string;
   revision: number;

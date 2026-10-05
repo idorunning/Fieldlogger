@@ -1,6 +1,6 @@
 # My Trail Log native Android release
 
-Package **com.field.logger**, version **2.1.0**, version code **8**. Minimum Android 7/API 24; target and compile SDK 36. The existing upload signing key is reused.
+Package **com.field.logger**, version **2.2.0**, version code **9**. Minimum Android 7/API 24; target and compile SDK 36. The existing upload signing key is reused.
 
 This release replaces the Trusted Web Activity with an Android interface written with AppCompat views. It has no WebView, browser launcher or downloaded HTML/JavaScript interface. CameraX provides camera preview, capture, tap-to-focus, pinch zoom and flash control. The app uses its own SQLite database and app-private photo files. WorkManager schedules connection-dependent background uploads and periodic retries; Android controls exact execution timing.
 
@@ -19,6 +19,10 @@ This release replaces the Trusted Web Activity with an Android interface written
 - The native app has no key icon, credential entry or service-key wording. Existing server configuration is retained; account administration remains on the desktop website.
 - Account settings provide JSON export/import and account deletion. Public references open their respective websites only when selected.
 
+## Community discoveries
+
+Photo cards have accessible acorn toggles. The full-screen native map uses photo-thumbnail pins and My photos, Following, Nearby, Everyone, Later and Invited filters, with category/radius controls and acorn ranking. Map results also have a list view. Open a journal photo to publish it, or use account settings for your username, selected-contact search, published photos, blocking and saved places. Shared user journals use dated scrapbook stacks. The normal Journal/Map/Camera/Collection/Milestones bar remains. See [community access and moderation](COMMUNITY.md) for service configuration, privacy rules and the verified shared GPT-6.1 Sol service.
+
 ## Moving from the web app
 
 The old TWA stored local data and sessions in Chrome. Native apps cannot read another app's private storage. Before updating, open the old app or fieldlogger.co.uk in the same browser, reconnect, and let pending photos upload. Export the web journal for an additional backup, especially for device-only or queued photos.
@@ -35,7 +39,7 @@ Run `android/gradlew testDebugUnitTest` from the Android project. The framework 
 
 ## Google Play
 
-Upload **my-trail-log-2.1.0-play.aab** to the existing application and testing track. Package and upload key match prior releases; Play signs installed updates with the account's existing app-signing key. The separately delivered direct APK uses the upload key and cannot update a Play-signed installation.
+Upload **my-trail-log-2.2.0-play.aab** to the existing application and testing track. Package and upload key match prior releases; Play signs installed updates with the account's existing app-signing key. The separately delivered direct APK uses the upload key and cannot update a Play-signed installation.
 
 Review Data safety for the native release: account details, photos, capture times, optional foreground location, background upload and optional OpenAI analysis. Keep the privacy and deletion URLs. Test camera/location denial, capture, offline reopen, reconnect, signing into the existing account and sharing on the Pixel before promoting the test release. The workspace's release report distinguishes automated checks from physical-phone checks.
 

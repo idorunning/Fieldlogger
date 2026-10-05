@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { KeyRound, LoaderCircle, ShieldCheck, Trash2 } from "lucide-react";
 type Status = {
   hasKey: boolean;
+  serverKey?: boolean;
   canSave: boolean;
   updatedAt: string | null;
 };
@@ -109,6 +110,7 @@ export default function ApiKeySettings({
       setBusy(false);
     }
   }
+  if (status?.serverKey && !status.canSave) return <p>Photo identification is included through My Trail Log’s shared service. No setup is needed on this device.</p>;
   return (
     <div className="key-settings">
       <p className="muted">

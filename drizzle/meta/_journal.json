@@ -15,6 +15,13 @@
       "when": 1791159217884,
       "tag": "0001_strange_virginia_dare",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1791223901054,
+      "tag": "0002_absent_vision",
+      "breakpoints": true
     }
   ]
 }

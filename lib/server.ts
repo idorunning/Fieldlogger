@@ -4,6 +4,9 @@ export type Bindings = {
   BUCKET: R2Bucket;
   API_KEY_ENCRYPTION_KEY?: string;
   OPENAI_MODEL?: string;
+  OPENAI_API_KEY?: string;
+  SHARED_OPENAI_KEY_OWNER_ID?: string;
+  COMMUNITY_ADMIN_USER_ID?: string;
   PLANTNET_API_KEY?: string;
   BIOCLIP_URL?: string;
   BIOCLIP_TOKEN?: string;

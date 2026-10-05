@@ -1,7 +1,8 @@
+import {visionRequestOptions} from './vision-model';
 import { bindings, database, json } from "./server";
 import { sealKey, unsealKey } from "./key-crypto";
 
-import { checkOpenAIResponse } from "./openai-response";
+import { inspectOpenAIResponse } from "./openai-response";
 export async function keyStatus(userId: string) {
   const row = await database()
     .prepare("SELECT updated_at FROM account_keys WHERE user_id=?")
@@ -9,9 +10,8 @@ export async function keyStatus(userId: string) {
     .first<{ updated_at: string }>();
   return {
     hasKey: !!row,
-    // Keep older clients compatible; identification is always account-scoped.
-    serverKey: false,
-    canSave: !!bindings().API_KEY_ENCRYPTION_KEY,
+    serverKey: await sharedKeyConfigured(),
+    canSave: !!bindings().API_KEY_ENCRYPTION_KEY && (!bindings().SHARED_OPENAI_KEY_OWNER_ID || userId === bindings().SHARED_OPENAI_KEY_OWNER_ID),
     updatedAt: row?.updated_at || null,
   };
 }
@@ -31,6 +31,8 @@ export async function accountKeySettings(
   action?: string,
 ) {
   if (request.method === "GET" && !action) return json(await keyStatus(userId));
+  if (bindings().SHARED_OPENAI_KEY_OWNER_ID && userId !== bindings().SHARED_OPENAI_KEY_OWNER_ID)
+    return json({error:"Identification is managed by My Trail Log."},403);
   if (request.method === "POST" && action === "test") {
     // A tiny Responses request tests the same model and permission as photo analysis.
     // Rate limit tests to one per 10 seconds per account, including failed tests.
@@ -55,14 +57,13 @@ export async function accountKeySettings(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: bindings().OPENAI_MODEL || "gpt-4.1-mini",
+        ...visionRequestOptions(bindings().OPENAI_MODEL, "test"),
         store: false,
         input: "Reply with OK.",
-        max_output_tokens: 16,
       }),
       signal: AbortSignal.timeout(30000),
     });
-    checkOpenAIResponse(response);
+    await inspectOpenAIResponse(response, apiKey);
     await response.body?.cancel();
     return json({
       ok: true,
@@ -118,4 +119,16 @@ export async function accountKeySettings(
     .bind(userId, envelope, new Date().toISOString())
     .run();
   return json({ ok: true });
+}
+
+export async function sharedKeyConfigured() {
+  if (bindings().OPENAI_API_KEY) return true;
+  const owner = bindings().SHARED_OPENAI_KEY_OWNER_ID;
+  if (!owner) return false;
+  return !!await database().prepare("SELECT user_id FROM account_keys WHERE user_id=?").bind(owner).first();
+}
+export async function getServiceKey(userId: string) {
+  if (bindings().OPENAI_API_KEY) return bindings().OPENAI_API_KEY!;
+  const owner = bindings().SHARED_OPENAI_KEY_OWNER_ID;
+  return getAccountKey(owner || userId);
 }

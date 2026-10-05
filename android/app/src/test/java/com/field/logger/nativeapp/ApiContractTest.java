@@ -93,13 +93,10 @@ public class ApiContractTest {
               .getJSONObject(0)
               .getBoolean("archived"));
       assertFalse(api.json("/api/settings/openai-key", "GET", cookie, null).optBoolean("hasKey"));
-      try {
-        api.json(
-            "/api/observations/" + record.id() + "/identify", "POST", cookie, new JSONObject());
-        fail("No API key should be configured for this test account");
-      } catch (Api.Failure e) {
-        assertEquals(503, e.status);
-      }
+      JSONObject status = api.json("/api/status", "GET", cookie, null);
+      assertTrue("Identification must work for a new account", status.optBoolean("identification"));
+      assertTrue(api.json("/api/settings/openai-key", "GET", cookie, null).optBoolean("serverKey"));
+      assertFalse(api.json("/api/settings/openai-key", "GET", cookie, null).optBoolean("canSave"));
       photo.delete();
     } finally {
       JSONObject confirm = new JSONObject();

@@ -17,9 +17,11 @@ import { categories, type ObservationWire } from "@/lib/types";
 import { identify } from "@/lib/identify";
 import {
   accountKeySettings,
-  getAccountKey,
+  getServiceKey,
+  sharedKeyConfigured,
   keyStatus,
 } from "@/lib/account-key";
+import { community, decorateOwnRecords, syncOwnSocial, removePublicFiles, limitAction } from "@/lib/community";
 import { OpenAIConnectionError } from "@/lib/openai-response";
 export const dynamic = "force-dynamic";
 const authSchema = z.object({
@@ -52,6 +54,8 @@ const observationSchema = z
     identification: z.unknown().nullable(),
     analysisState: z.enum(["pending", "complete", "error"]),
     archived: z.boolean().optional(),
+    acorned: z.boolean().optional(),
+    checkLater: z.boolean().optional(),
     updatedAt: z.string().datetime(),
     revision: z.number().int().min(1),
   })
@@ -156,7 +160,7 @@ async function handle(request: Request) {
       const saved = viewer ? await keyStatus(viewer.id) : null;
       return json({
         storage: !!bindings().DB && !!bindings().BUCKET,
-        identification: !!saved?.hasKey,
+        identification: !!saved?.hasKey || await sharedKeyConfigured(),
         plantnet: !!bindings().PLANTNET_API_KEY,
         bioclip: !!bindings().BIOCLIP_URL,
       });
@@ -170,6 +174,7 @@ async function handle(request: Request) {
     }
     const user = await getUser(request);
     if (!user) return json({ error: "Sign in to sync your journal." }, 401);
+    if (path[0] === "social") return await community(request,path.slice(1),user);
     if (path[0] === "account" && request.method === "DELETE") {
       if (request.headers.get("origin") !== new URL(request.url).origin)
         return json({ error: "Open your account in My Trail Log to delete it." }, 403);
@@ -179,6 +184,7 @@ async function handle(request: Request) {
         return json({error: "That password did not match. Your account has not been deleted."}, 401);
       // Revoke sessions first so queued uploads cannot restart during deletion.
       await database().prepare("DELETE FROM sessions WHERE user_id=?").bind(user.id).run();
+      await removePublicFiles(user.id);
       let cursor: string | undefined;
       do {
         const page = await bindings().BUCKET.list({prefix: user.id + "/", cursor});
@@ -206,16 +212,9 @@ async function handle(request: Request) {
     if (path[0] !== "observations") return json({ error: "Not found" }, 404);
     const id = path[1];
     if (!id && request.method === "GET") {
-      const rows = await database()
-        .prepare(
-          "SELECT data FROM observations WHERE user_id=? ORDER BY updated_at DESC",
-        )
-        .bind(user.id)
-        .all<{ data: string }>();
-      return json({
-        observations: rows.results.map((r) => JSON.parse(r.data)),
-      });
+      return json({observations: await decorateOwnRecords(user.id)});
     }
+
     if (!z.string().uuid().safeParse(id).success)
       return json({ error: "Invalid observation" }, 400);
     const existing = await database()
@@ -242,18 +241,22 @@ async function handle(request: Request) {
       const record = JSON.parse(existing.data) as ObservationWire;
       if (record.analysisState === "complete" && record.identification)
         return json({ identification: record.identification });
-      const apiKey = await getAccountKey(user.id);
+      const apiKey = await getServiceKey(user.id);
       if (!apiKey)
         return json(
           {
             error:
-              "Open API key settings to connect photo identification. Your photo is saved.",
+              "Identification is temporarily unavailable. Your photo is saved.",
           },
           503,
         );
       const object = await bindings().BUCKET.get(existing.photo_key);
       if (!object) return json({ error: "Photo unavailable" }, 404);
-      const result = await identify(await object.arrayBuffer(), record, apiKey);
+      if (!await limitAction("identify:" + user.id, 20, 60000)) return json({error:"Please wait a minute. Your photo is saved."},429);
+      if (!await limitAction("identify-photo:" + id, 1, 90000)) return json({error:"This photo is already being identified. Try again shortly."},429);
+      let result;
+      try { result = await identify(await object.arrayBuffer(), record, apiKey); }
+      finally { await database().prepare("DELETE FROM auth_attempts WHERE key=?").bind("identify-photo:"+id).run(); }
       const fresh = await database()
         .prepare("SELECT data FROM observations WHERE id=? AND user_id=?")
         .bind(id, user.id)
@@ -311,6 +314,8 @@ async function handle(request: Request) {
         identification: prior?.identification || null,
         analysisState: prior?.identification ? "complete" : "pending",
         archived: validated.archived ?? prior?.archived ?? false,
+        acorned: validated.acorned ?? prior?.acorned ?? false,
+        checkLater: validated.checkLater ?? prior?.checkLater ?? false,
       };
       const key = `${user.id}/${id}.jpg`;
       await bindings().BUCKET.put(key, bytes, {
@@ -322,12 +327,15 @@ async function handle(request: Request) {
         )
         .bind(id, user.id, JSON.stringify(metadata), key, metadata.updatedAt)
         .run();
+      await syncOwnSocial(user.id,id,{archived: metadata.archived,acorned:validated.acorned,checkLater:validated.checkLater});
       return json({ ok: true });
     }
     return json({ error: "Not found" }, 404);
   } catch (error) {
-    if (error instanceof OpenAIConnectionError)
-      return json({ error: error.message }, error.status);
+    if (error instanceof OpenAIConnectionError) {
+      const administration = new URL(request.url).pathname.startsWith("/api/settings/");
+      return json({ error: administration ? error.message : "The identification service is temporarily unavailable. Your photo is saved in your private journal." }, administration ? error.status : 503);
+    }
     if (error instanceof z.ZodError || error instanceof SyntaxError)
       return json(
         {

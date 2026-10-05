@@ -51,7 +51,7 @@ public final class Api {
             .url(ORIGIN + path)
             .header("Accept", "application/json")
             .header("Origin", ORIGIN)
-            .header("User-Agent", "MyTrailLog-Android/2.0.1");
+            .header("User-Agent", "MyTrailLog-Android/2.2.0");
     if (cookie != null && !cookie.isEmpty()) request.header("Cookie", cookie);
     byte[] payload = body;
     if (payload == null
@@ -69,7 +69,12 @@ public final class Api {
         client
             .newBuilder()
             .readTimeout(
-                path.endsWith("/identify") ? 90 : 25, java.util.concurrent.TimeUnit.SECONDS)
+                (path.endsWith("/identify")
+                        || path.endsWith("/publish")
+                        || path.contains("/moderation/"))
+                    ? 100
+                    : 25,
+                java.util.concurrent.TimeUnit.SECONDS)
             .build();
     try (okhttp3.Response response = selected.newCall(request.build()).execute()) {
       byte[] bytes =

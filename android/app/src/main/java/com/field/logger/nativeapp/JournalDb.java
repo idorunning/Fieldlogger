@@ -60,6 +60,21 @@ public final class JournalDb extends SQLiteOpenHelper {
     return result;
   }
 
+  public synchronized Observation toggleFlag(String id, String owner, String flag) {
+    if (!flag.equals("acorned") && !flag.equals("checkLater"))
+      throw new IllegalArgumentException("Unknown journal flag");
+    Observation latest = find(id);
+    if (latest == null || !latest.owner.equals(owner)) return null;
+    JSONObject data = Observation.copy(latest.data);
+    boolean active = !data.optBoolean(flag);
+    Observation.put(data, flag, active);
+    if (flag.equals("acorned"))
+      Observation.put(
+          data, "acornCount", Math.max(0, data.optInt("acornCount") + (active ? 1 : -1)));
+    edit(latest, data);
+    return find(id);
+  }
+
   public synchronized Observation find(String id) {
     try (Cursor c =
         getReadableDatabase()

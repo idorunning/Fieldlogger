@@ -1,6 +1,15 @@
 # Validation — 5 October 2026
 
-## Current native release 2.1.0 (8)
+## Current native release 2.2.0 (9)
+
+- Native API 24/36 checks cover full-screen map filters, sign-in gates, accessible acorn toggles and offline count/bookmark persistence, alongside the existing journal/camera/archiving tests.
+- TypeScript checks, 18 domain tests and a local D1/R2 API integration run pass. Local integration verifies 16 groups of checks: email invitation possession, local browsing radius, idempotent acorns, private saved places, selected-contact opt-in, blocking, reporting and unpublish revocation.
+- Live production registration, private upload/download, account deletion and shared-service configuration checks pass. New accounts cannot change the owner's shared credential.
+- Live **GPT-6.1 Sol** identification and publication checks pass with the existing shared key. A public-domain human portrait was blocked; a nature photo passed. Invitation claim, unique acorns, saved places, immutable public bytes and unpublish revocation also passed. Temporary accounts were deleted after testing. This is a small integration sample, not a species-accuracy benchmark.
+- Native map screenshots render the actual photo pins and controls; this headless renderer does not load map tiles. The map/list/publishing screens still need a physical-phone walkthrough. No physical Pixel test or Play submission was performed.
+- The release is signed using the original upload key, package com.field.logger, minimum SDK 24 and target SDK 36. See the delivered release JSON for final bundle/signature/alignment and test totals.
+
+## Previous native release 2.1.0 (8)
 
 - All 43 Android framework tests passed, including SDK 24/36 startup/navigation, swipe/cancel/page-turn gestures, account archive access, reversible archive metadata and owner isolation, late GPS/EXIF protection, original capture-day/timezone, service-message sanitization, and a bounded native story renderer with no shared JPEG GPS/EXIF.
 - The live native integration test creates, uploads and deletes its own throwaway account. Archive/restore round trips and an older-client upload with the archive field absent pass against the deployed server. No paid identification or private user photo is used in these checks.

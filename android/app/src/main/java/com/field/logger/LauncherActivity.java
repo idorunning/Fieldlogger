@@ -29,9 +29,6 @@ import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import org.json.*;
-import org.osmdroid.config.Configuration;
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory;
-import org.osmdroid.util.GeoPoint;
 import org.osmdroid.views.MapView;
 import org.osmdroid.views.overlay.*;
 
@@ -182,10 +179,28 @@ public final class LauncherActivity extends AppCompatActivity {
   }
 
   private void handleLink(Intent intent) {
+    String nativeView = intent.getStringExtra("view");
+    String observationId = intent.getStringExtra("observation_id");
+    if ("camera".equals(nativeView)) openCamera();
+    else if ("login".equals(nativeView)) showLogin(false);
+    else if ("collection".equals(nativeView)) showCollection();
+    else if ("achievements".equals(nativeView)) showMilestones();
+    if (observationId != null) {
+      Observation selected = repo.db.find(observationId);
+      if (selected != null && selected.owner.equals(repo.owner())) showDetail(selected);
+    }
     Uri uri = intent.getData();
     if (uri != null
         && "fieldlogger.co.uk".equals(uri.getHost())
         && "https".equals(uri.getScheme())) {
+      if ("/invite".equals(uri.getPath())) {
+        String token = uri.getQueryParameter("token");
+        if (token != null && token.matches("[a-f0-9]{64}")) {
+          getSharedPreferences("pending-invite", 0).edit().putString("token", token).apply();
+          community("invite", "");
+        }
+        return;
+      }
       String view = uri.getQueryParameter("view");
       if ("camera".equals(view)) openCamera();
       else if ("map".equals(view)) showMap();
@@ -614,6 +629,10 @@ public final class LauncherActivity extends AppCompatActivity {
         new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START);
     badge.setMargins(dp(10), dp(10), 0, 0);
     photo.addView(kind, badge);
+    FrameLayout.LayoutParams acornPosition =
+        new FrameLayout.LayoutParams(-2, dp(48), Gravity.TOP | Gravity.END);
+    acornPosition.setMargins(0, dp(8), dp(8), 0);
+    photo.addView(ownAcorn(r), acornPosition);
     if (r.pending) {
       TextView local = text("Saved locally", 10, PAPER, false);
       pad(local, 7);
@@ -759,6 +778,40 @@ public final class LauncherActivity extends AppCompatActivity {
             true));
     space(details, 8);
     details.addView(title(record.name(), 34, FOREST));
+    LinearLayout socialActions = row();
+    socialActions.addView(ownAcorn(record), new LinearLayout.LayoutParams(-2, dp(48)));
+    TextView later =
+        button(
+            record.data.optBoolean("checkLater") ? "Saved for later" : "Check out later",
+            false,
+            () -> {});
+    later.setOnClickListener(
+        v -> {
+          Observation updated = repo.db.toggleFlag(record.id(), repo.owner(), "checkLater");
+          if (updated != null) {
+            later.setText(
+                updated.data.optBoolean("checkLater") ? "Saved for later" : "Check out later");
+            repo.enqueue();
+          }
+        });
+    socialActions.addView(later, new LinearLayout.LayoutParams(0, -2, 1));
+    details.addView(socialActions);
+    if (!record.archived()) {
+      space(details, 12);
+      JSONObject publication = record.data.optJSONObject("publication");
+      details.addView(
+          button(
+              publication != null && publication.optString("status").equals("published")
+                  ? "Manage published photo"
+                  : "Publish discovery",
+              false,
+              () ->
+                  community(
+                      publication != null && publication.optString("status").equals("published")
+                          ? "published"
+                          : "publish",
+                      record.id())));
+    }
     String scientific = record.data.optString("scientificName");
     if (!scientific.isEmpty()) details.addView(text(scientific, 17, MUTED, false));
     space(details, 16);
@@ -1228,67 +1281,28 @@ public final class LauncherActivity extends AppCompatActivity {
     body.addView(scroll(content), new FrameLayout.LayoutParams(-1, -1));
   }
 
-  private void showMap() {
+  private void community(String mode, String id) {
     leaveCapture();
-    screen = "map";
-    frame(false, true);
-    records = repo.db.listActive(repo.owner());
-    Configuration.getInstance().setUserAgentValue("MyTrailLog-Android/2.0.1 (fieldlogger.co.uk)");
-    Configuration.getInstance().setOsmdroidBasePath(new File(getCacheDir(), "map"));
-    Configuration.getInstance().setOsmdroidTileCache(new File(getCacheDir(), "map/tiles"));
-    map = new MapView(this);
-    map.setTileSource(TileSourceFactory.MAPNIK);
-    map.setMultiTouchControls(true);
-    map.setBuiltInZoomControls(false);
-    map.setTilesScaledToDpi(true);
-    body.addView(map, new FrameLayout.LayoutParams(-1, -1));
-    GeoPoint center = new GeoPoint(54, -2);
-    boolean found = false;
-    for (Observation r : records)
-      if (r.hasGps()) {
-        GeoPoint point = new GeoPoint(r.data.optDouble("latitude"), r.data.optDouble("longitude"));
-        if (!found) {
-          center = point;
-          found = true;
-        }
-        Marker marker = new Marker(map);
-        marker.setPosition(point);
-        marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER);
-        marker.setTitle(r.name());
-        GradientDrawable dot = shape(Observation.color(r.category()), 16);
-        dot.setSize(dp(25), dp(25));
-        dot.setStroke(dp(3), PAPER);
-        marker.setIcon(dot);
-        marker.setOnMarkerClickListener(
-            (m, v) -> {
-              showDetail(r);
-              return true;
-            });
-        map.getOverlays().add(marker);
-      }
-    map.getController().setZoom(found ? 14d : 5d);
-    map.getController().setCenter(center);
-    LinearLayout top = row();
-    pad(top, 12);
-    top.setBackground(shape(0xeef8f9f4, 18));
-    top.addView(
-        text(found ? "Your discovery map" : "Photos with GPS appear here", 16, FOREST, true),
-        new LinearLayout.LayoutParams(0, -2, 1));
-    top.addView(
-        iconButton("plus", "Zoom in", FOREST, 0xffeaf0e1, () -> map.getController().zoomIn()),
-        new LinearLayout.LayoutParams(dp(48), dp(48)));
-    TextView minus = button("−", false, () -> map.getController().zoomOut());
-    top.addView(minus, new LinearLayout.LayoutParams(dp(48), dp(48)));
-    FrameLayout.LayoutParams tp = new FrameLayout.LayoutParams(-1, -2, Gravity.TOP);
-    tp.setMargins(dp(12), dp(10), dp(12), 0);
-    body.addView(top, tp);
-    TextView attribution = text("© OpenStreetMap contributors", 12, FOREST, false);
-    pad(attribution, 8);
-    attribution.setBackgroundColor(PAPER);
-    attribution.setOnClickListener(v -> openReference("https://www.openstreetmap.org/copyright"));
-    body.addView(
-        attribution, new FrameLayout.LayoutParams(-2, dp(48), Gravity.BOTTOM | Gravity.START));
-    map.onResume();
+    startActivity(
+        new Intent(this, CommunityActivity.class).putExtra("mode", mode).putExtra("id", id));
+  }
+
+  private void showMap() {
+    community("map", "");
+  }
+
+  private AcornButton ownAcorn(Observation record) {
+    AcornButton button =
+        new AcornButton(this, record.data.optBoolean("acorned"), record.data.optInt("acornCount"));
+    button.setOnClickListener(
+        v -> {
+          Observation changed = repo.db.toggleFlag(record.id(), repo.owner(), "acorned");
+          if (changed == null) return;
+          button.update(changed.data.optBoolean("acorned"), changed.data.optInt("acornCount"));
+          button.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+          repo.enqueue();
+        });
+    return button;
   }
 
   private void showAccount() {
@@ -1323,7 +1337,10 @@ public final class LauncherActivity extends AppCompatActivity {
       "Import web journal backup",
       "Sources & privacy",
       "Sign out",
-      "Delete account"
+      "Delete account",
+      "Community profile & friends",
+      "My published photos",
+      "Places to check out later"
     };
     new AlertDialog.Builder(this)
         .setTitle(user.optString("name", "Your journal"))
@@ -1353,6 +1370,15 @@ public final class LauncherActivity extends AppCompatActivity {
                 case 6:
                   deleteAccount();
                   break;
+                case 7:
+                  community("settings", "");
+                  break;
+                case 8:
+                  community("published", "");
+                  break;
+                case 9:
+                  community("saved", "");
+                  break;
               }
             })
         .setNegativeButton("Close", null)
@@ -1367,7 +1393,13 @@ public final class LauncherActivity extends AppCompatActivity {
     repo.enqueue();
     if (archive) showJournal();
     else showArchive();
-    message(archive ? "Moved to Archive in your account settings." : "Restored to your journal.");
+    JSONObject shared = record.data.optJSONObject("publication");
+    message(
+        archive
+            ? (shared != null && shared.optString("status").equals("published")
+                ? "Moved to Archive. The shared copy will be unpublished when this phone syncs."
+                : "Moved to Archive in your account settings.")
+            : "Restored to your journal.");
   }
 
   private void showArchive() {
@@ -1460,6 +1492,10 @@ public final class LauncherActivity extends AppCompatActivity {
                                   () -> {
                                     busy = false;
                                     dialog.dismiss();
+                                    if ("login".equals(getIntent().getStringExtra("view"))) {
+                                      finish();
+                                      return;
+                                    }
                                     showJournal();
                                     message(
                                         "Signed in. Your uploaded photos will appear as they"
