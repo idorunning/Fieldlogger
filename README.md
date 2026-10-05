@@ -6,7 +6,7 @@ A mobile-first personal countryside discovery journal: photograph something, sav
 
 The web app includes private API-key settings at `/#api-key`. Sign in or create your journal account, paste your key into the masked field, and choose **Save key**, then **Test connection**. Keys can be replaced or removed here later. No key needs to be sent in chat. Identification remains unavailable until a working key is configured; the app never invents successful analysis.
 
-Account keys are encrypted with AES-256-GCM before storage. The encryption key is a Sites runtime secret, separate from the database, source and browser bundles. See `docs/API-KEY-SETUP.md` for operation and test coverage. A live OpenAI photo identification still needs the user's key.
+Account keys are encrypted with AES-256-GCM before storage. The encryption key is a Sites runtime secret, separate from the database, source and browser bundles. See `docs/API-KEY-SETUP.md` for operation and test coverage. Live OpenAI identification has been verified on the deployed app with an explicitly authorized temporary test key. Replace it through the private key settings when needed.
 
 ## Included
 
@@ -21,6 +21,12 @@ Account keys are encrypted with AES-256-GCM before storage. The encryption key i
 - Category counts, scientific-name collection, month chart and eight curiosity-based achievements.
 - User corrections and field notes; image-only sharing or a generated photo/story card. Exact GPS is not placed on shared images; place name is optional.
 - JSON journal export including photos, GPS and metadata.
+
+## Source and hosting
+
+The source repository is [idorunning/Fieldlogger](https://github.com/idorunning/Fieldlogger), on `main`. Make changes in this repository. Sites still requires a matching source push to its deployment mirror and a build archive; pushing GitHub alone does not publish the website. Keep `.openai/hosting.json` and the existing database and image storage.
+
+`fieldlogger.co.uk` is attached to the existing deployment, but it needs the Cloudflare DNS records in [docs/DOMAIN-SETUP.md](docs/DOMAIN-SETUP.md) before HTTPS can work. The deployment is owner-private and requires the owner's ChatGPT access before the journal's own password login.
 
 ## Run locally
 
@@ -39,7 +45,7 @@ npm run build
 npx wrangler dev --config dist/server/wrangler.json --port 8787 --persist-to "$PWD/.wrangler/state"
 ```
 
-Never package `.wrangler`, `.env*`, or local browser profiles. The app's D1 migrations are schema-only; QA accounts and photos exist only in the local emulator, not deployment output.
+Never package `.wrangler`, `.env*`, or local browser profiles. The app's D1 migrations are schema-only; QA accounts and public test photos were created through the local and deployed APIs; deployment output contains no seeded accounts or photos.
 
 ## Checks
 
@@ -56,7 +62,7 @@ The browser acceptance test uses Playwright and `/usr/bin/chromium`, a disposabl
 
 Server secrets belong in ignored local environment files through approved secure setup, and in hosting secret configuration for deployment. No provider key belongs in browser JavaScript. Optional variable names are documented in `.env.example`; it contains no secrets.
 
-The existing private Site is `appgprj_6ac2d981043081919ee03d9ff57bf87e`; reuse `.openai/hosting.json`. Do not register a replacement. Logical storage bindings are `DB` and `BUCKET`. Production build emits `dist/server/index.js`, `dist/client`, and `dist/.openai` including migrations.
+The existing private Site is `appgprj_6ac2d981043081919ee03d9ff57bf87e`; reuse `.openai/hosting.json`. Do not register a replacement. Logical storage bindings are `DB` and `BUCKET`. Production build emits `dist/server/index.js`, `dist/client`, and `dist/.openai` for hosting metadata, and `dist/drizzle` for migrations. The deployment archive puts the latter two at `.openai/` and `drizzle/` at its root.
 
 The Sites skill's local helper scripts were not installed in this environment. SEBP source was retrieved over its authenticated source repository and used as a retained build scaffold. Publication uses an exact-source push and validated build archive followed by native Sites deployment. Registration alone is not a live URL; check the native deployment result for the published status.
 
@@ -66,4 +72,4 @@ The app must load online once before it can reopen offline. IndexedDB contains r
 
 ## Next gate
 
-Enter an OpenAI key through the private website, test an actual photo through the full provider pipeline, and test camera/GPS on the user's phone. The Android bundle is the next phase after that working web version; see `docs/ANDROID.md`. No `.aab` or installable `.apk` has been generated yet.
+Finish Cloudflare DNS and HTTPS validation for `fieldlogger.co.uk`, then test camera/GPS on the user's phone. The deployed provider, image storage, and identification pipeline have passed live checks. The Android bundle is the next phase after that working web version; see `docs/ANDROID.md`. No `.aab` or installable `.apk` has been generated yet.

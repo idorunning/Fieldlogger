@@ -12,7 +12,9 @@ Executed against the actual local Cloudflare Worker preview with D1 and R2 emula
 - Optional BioCLIP service: Python syntax validation only; model dependencies and weights have not been installed or exercised.
 - Browser WebMCP is feature-detected. Supported-context registration validation is unavailable in the test browser; this does not affect normal controls.
 
-Not yet verified: a real OpenAI identification, Pl@ntNet/BioCLIP inference, a hosted production deployment, physical Android camera/GPS/Background Sync, or an Android APK/AAB. No provider key has been created or written, and no private photo has been sent to a model provider during these checks.
+Live deployed verification passed after correcting deployment archive migration placement: registration, OpenAI connection, R2 photo upload/retrieval with an exact SHA-256 match, and real OpenAI identification of a public test bluebell photograph with Wikipedia and GBIF references. The temporary key was explicitly authorized for testing and configured as a hosting secret; it is absent from source and build output. No private user photo was used.
+
+Not yet verified: Pl@ntNet/BioCLIP inference, physical Android camera/GPS/Background Sync, or an Android APK/AAB. The custom domain is pending DNS and certificate validation.
 
 ## Private API-key settings
 
@@ -21,4 +23,4 @@ Not yet verified: a real OpenAI identification, Pl@ntNet/BioCLIP inference, a ho
 - Local D1 integration passed: authenticated create/replace/remove, cross-account isolation, no credential in responses, no-store response headers, strict Origin enforcement (including missing Origin), JSON/payload validation, and no-key connection test.
 - Mobile browser passed: sign-in gate, masked entry, field clearing, persisted status after reload, replacement, expired-key message, confirmed removal, offline lockout, no key in IndexedDB/localStorage/sessionStorage, no overflow or uncaught browser errors.
 - Full prior photo/offline browser suite and server integration rerun and passed after this change.
-- All key tests used deliberate non-provider fixtures. The expired-key UI response was simulated; backend status mapping was unit-tested. No real OpenAI key, connection test, or photo analysis was exercised.
+- All key tests used deliberate non-provider fixtures. The expired-key UI response was simulated; backend status mapping was unit-tested. Those key-settings regression tests do not call OpenAI. Separate live connection and photo tests subsequently passed as recorded above.
