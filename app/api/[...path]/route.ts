@@ -31,6 +31,7 @@ import {billingSetupRoute,disconnectBillingForDeletedOwner} from '@/lib/billing-
 import {avatarHandler} from '@/lib/avatar-server';
 import {exportJournal} from '@/lib/export-server';
 import {AiBudgetError} from '@/lib/ai-budget';
+import {ensureRuntimeSchema,RuntimeSchemaError} from '@/lib/runtime-migrations';
 export const dynamic = "force-dynamic";
 const authSchema = z.object({
   email: z
@@ -172,6 +173,7 @@ async function handle(request: Request) {
       const body=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){body.set(chunk,offset);offset+=chunk.byteLength;}
       const headers=new Headers(request.headers);headers.delete('content-length');request=new Request(request.url,{method:request.method,headers,body});
     }
+    await ensureRuntimeSchema(database());
     if(path[0]==='plans'&&request.method==='GET')return plansResponse();
     if (path[0] === "place" && request.method === "GET") return await reversePlace(request);
     if (path[0] === "status") {
@@ -368,6 +370,7 @@ async function handle(request: Request) {
     }
     return json({ error: "Not found" }, 404);
   } catch (error) {
+    if(error instanceof RuntimeSchemaError){console.error('Static journal schema setup failed');return json({error:error.message,code:'storage_upgrading',keep_local:true},503);}
     if(error instanceof AiBudgetError)return json({error:error.message,code:'analysis_resting',keep_local:true},503);
     if (error instanceof OpenAIConnectionError) {
       const administration = new URL(request.url).pathname.startsWith("/api/settings/");
