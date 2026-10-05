@@ -89,6 +89,8 @@ public class LauncherActivityTest {
       View root = app.getWindow().getDecorView();
       assertTrue(hasText(root, "Your field journal"));
       assertNotNull(find(root, "Camera"));
+      assertNull(find(root, "Identification settings"));
+      assertFalse(hasText(root, "API key"));
       assertNull(Shadows.shadowOf(app).getNextStartedActivity());
       assertFalse(containsWebView(root));
       assertFalse(app.isFinishing());
@@ -114,12 +116,17 @@ public class LauncherActivityTest {
   public void nativeAccountFormUsesExistingFieldLoggerLogin() {
     try (ActivityController<LauncherActivity> controller = start()) {
       LauncherActivity app = controller.get();
-      find(app.getWindow().getDecorView(), "Sign in or register").performClick();
+      find(app.getWindow().getDecorView(), "Your account").performClick();
       androidx.appcompat.app.AlertDialog dialog =
           (androidx.appcompat.app.AlertDialog)
               org.robolectric.shadows.ShadowDialog.getLatestDialog();
       assertNotNull(dialog);
       assertTrue(dialog.isShowing());
+      assertEquals("Archive", dialog.getListView().getAdapter().getItem(1));
+      dialog.getListView().performItemClick(dialog.getListView().getChildAt(0), 0, 0);
+      dialog =
+          (androidx.appcompat.app.AlertDialog)
+              org.robolectric.shadows.ShadowDialog.getLatestDialog();
       assertTrue(hasText(dialog.getWindow().getDecorView(), "Welcome back"));
       assertTrue(hasText(dialog.getWindow().getDecorView(), "Import web journal backup"));
     }

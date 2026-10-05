@@ -68,6 +68,30 @@ public class ApiContractTest {
       } catch (Api.Failure e) {
         assertEquals(401, e.status);
       }
+      Observation.put(record.data, "archived", true);
+      Observation.put(record.data, "revision", 2);
+      api.upload(record, cookie);
+      assertTrue(
+          api.json("/api/observations", "GET", cookie, null)
+              .getJSONArray("observations")
+              .getJSONObject(0)
+              .getBoolean("archived"));
+      record.data.remove("archived");
+      Observation.put(record.data, "revision", 3);
+      api.upload(record, cookie);
+      assertTrue(
+          api.json("/api/observations", "GET", cookie, null)
+              .getJSONArray("observations")
+              .getJSONObject(0)
+              .getBoolean("archived"));
+      Observation.put(record.data, "archived", false);
+      Observation.put(record.data, "revision", 4);
+      api.upload(record, cookie);
+      assertFalse(
+          api.json("/api/observations", "GET", cookie, null)
+              .getJSONArray("observations")
+              .getJSONObject(0)
+              .getBoolean("archived"));
       assertFalse(api.json("/api/settings/openai-key", "GET", cookie, null).optBoolean("hasKey"));
       try {
         api.json(

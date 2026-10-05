@@ -79,6 +79,14 @@ assert.equal(
   ).status,
   404,
 );
+for (const archived of [true, undefined, false]) {
+  meta.revision++;
+  if (archived === undefined) delete meta.archived; else meta.archived = archived;
+  const r = await fetch(`${base}/api/observations/${id}`, { method: "PUT", headers: { Cookie: first.cookie }, body: await makeForm() });
+  assert.equal(r.status, 200, await r.text());
+  const data = await (await fetch(base + "/api/observations", {headers: { Cookie: first.cookie }})).json();
+  assert.equal(data.observations[0].archived, archived !== false);
+}
 assert.equal(
   (
     await fetch(`${base}/api/observations/${id}/identify`, {
@@ -117,5 +125,5 @@ assert.equal(
   401,
 );
 console.log(
-  "PASS: signup, HttpOnly session, upload, idempotent retry, image access, ownership isolation, evidence integrity, missing-key response, invalid login, CSRF and logout revocation.",
+  "PASS: signup, HttpOnly session, upload, idempotent retry, archive/restore and older-client compatibility, image access, ownership isolation, evidence integrity, missing-key response, invalid login, CSRF and logout revocation.",
 );

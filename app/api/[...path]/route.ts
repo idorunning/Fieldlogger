@@ -51,6 +51,7 @@ const observationSchema = z
     confirmed: z.boolean(),
     identification: z.unknown().nullable(),
     analysisState: z.enum(["pending", "complete", "error"]),
+    archived: z.boolean().optional(),
     updatedAt: z.string().datetime(),
     revision: z.number().int().min(1),
   })
@@ -309,6 +310,7 @@ async function handle(request: Request) {
         ...validated,
         identification: prior?.identification || null,
         analysisState: prior?.identification ? "complete" : "pending",
+        archived: validated.archived ?? prior?.archived ?? false,
       };
       const key = `${user.id}/${id}.jpg`;
       await bindings().BUCKET.put(key, bytes, {

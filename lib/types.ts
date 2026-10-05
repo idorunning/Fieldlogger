@@ -65,6 +65,7 @@ export type Observation = {
   identification: Identification | null;
   syncState: "pending" | "synced" | "error";
   analysisState: "pending" | "complete" | "error";
+  archived?: boolean;
   error?: string;
   updatedAt: string;
   revision: number;

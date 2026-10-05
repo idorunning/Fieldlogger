@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type CSSProperties,
   type Dispatch,
   type SetStateAction,
 } from "react";
@@ -104,14 +105,16 @@ function Photo({
   blob,
   alt,
   className,
+  style,
 }: {
   blob: Blob;
   alt: string;
   className?: string;
+  style?: CSSProperties;
 }) {
   const url = usePhoto(blob);
   return url ? (
-    <img src={url} alt={alt} className={className} loading="lazy" />
+    <img src={url} alt={alt} className={className} style={style} loading="lazy" />
   ) : null;
 }
 function CategoryIcon({
@@ -907,6 +910,8 @@ export default function Fieldnotes() {
   const owner = user?.id || "guest";
   const [view, setView] = useState<View>("discover"),
     [records, setRecords] = useState<Observation[]>([]),
+    [archivedRecords, setArchivedRecords] = useState<Observation[]>([]),
+    [archiveOpen, setArchiveOpen] = useState(false),
     [category, setCategory] = useState<Category | "all">("all"),
     [query, setQuery] = useState(""),
     [from, setFrom] = useState(""),
@@ -941,7 +946,9 @@ export default function Fieldnotes() {
   }, []);
   const refresh = useCallback(async () => {
     try {
-      setRecords(await listLocal(owner));
+      const all = await listLocal(owner);
+      setRecords(all.filter(r => !r.archived));
+      setArchivedRecords(all.filter(r => r.archived));
       setReady(true);
     } catch {
       toast(
@@ -1105,7 +1112,7 @@ export default function Fieldnotes() {
     [records, category, from, to, query],
   );
   const choose = useCallback((r: Observation) => setSelected(r.id), []),
-    chosen = records.find((r) => r.id === selected);
+    chosen = [...records, ...archivedRecords].find((r) => r.id === selected);
   async function photoChosen(
     file: File | undefined,
     source: "camera" | "gallery",
@@ -1228,7 +1235,7 @@ export default function Fieldnotes() {
   async function backup() {
     try {
       const out = await Promise.all(
-        records.map(async (r) => ({
+        (await listLocal(owner)).map(async (r) => ({
           ...r,
           photo: await new Promise<string>((resolve, reject) => {
             const reader = new FileReader();
@@ -2178,12 +2185,22 @@ export default function Fieldnotes() {
         <h3>{user.name}</h3><p className="muted">{user.email}</p>
         <div className="account-actions form-stack">
           <button className="button primary full" onClick={() => { setAccountOpen(false); setKeySettings(true); }}><Sparkles size={22} />Photo identification settings</button>
-          <button className="button secondary full" onClick={backup} disabled={!records.length}><Download size={22} />Export my journal</button>
+          <button className="button secondary full" onClick={() => { setAccountOpen(false); setArchiveOpen(true); }}><BookOpen size={22} />Archive · {archivedRecords.length}</button>
+          <button className="button secondary full" onClick={backup} disabled={!records.length && !archivedRecords.length}><Download size={22} />Export my journal</button>
           <button className="button secondary full" onClick={() => { setAccountOpen(false); setView("sources"); }}><CircleHelp size={22} />Sources & offline help</button>
           <a className="button secondary full" href="/privacy">Privacy & your data</a>
           <a className="button secondary full" href="/delete-account">Delete account</a>
           <button className="button secondary full" onClick={() => void signOut().then(() => setAccountOpen(false)).catch(e => toast(e.message))}><LogOut size={22} />Sign out</button>
         </div>
+      </Dialog>}
+      {archiveOpen && <Dialog title="Your archive" onClose={() => setArchiveOpen(false)}>
+        <p className="muted">Kept safely, outside your active journal. Restore a memory whenever you like.</p>
+        {!archivedRecords.length && <p>No archived memories yet.</p>}
+        {archivedRecords.map(r => <div key={r.id} className="form-stack" style={{marginBottom: 24}}>
+          <Photo blob={r.photo} alt={r.name || "Archived discovery"} style={{width: "100%", maxHeight: 260, objectFit: "cover", borderRadius: 16}} />
+          <strong>{r.name || "A little mystery"}</strong><span className="muted">{r.localDate} · {r.place}</span>
+          <button className="button secondary full" onClick={() => void update({...r, archived: false, updatedAt: new Date().toISOString(), revision: r.revision + 1, syncState: "pending"})}>Restore to journal</button>
+        </div>)}
       </Dialog>}
       {login && <Login onClose={() => setLogin(false)} />}{" "}
       {keySettings && !login && (

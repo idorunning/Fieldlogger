@@ -114,6 +114,7 @@ public final class Repository {
                   record.data.optDouble("latitude"),
                   record.data.optDouble("longitude"),
                   place);
+            else retry = true;
           } catch (IOException e) {
             retry = true;
           }
@@ -134,7 +135,9 @@ public final class Repository {
             }
           }
           Observation latest = db.find(record.id());
-          if (latest != null && latest.data.optString("analysisState").equals("pending")) {
+          if (latest != null
+              && !latest.archived()
+              && latest.data.optString("analysisState").equals("pending")) {
             JSONObject ai =
                 api.json(
                         "/api/observations/" + record.id() + "/identify",
@@ -145,7 +148,7 @@ public final class Repository {
             db.mergeAnalysis(record.id(), owner, ai);
           }
         } catch (Api.Failure e) {
-          db.error(record.id(), owner, e.getMessage());
+          db.error(record.id(), owner, identificationMessage(e));
           if (e.status == 401) throw e;
           if (e.status != 503 && e.status != 400 && e.status != 409) retry = true;
         } catch (IOException e) {
@@ -195,6 +198,14 @@ public final class Repository {
         cell, place, System.currentTimeMillis() + (place.isEmpty() ? 60000 : 30L * 86400000));
     Thread.sleep(1100);
     return place;
+  }
+
+  public static String identificationMessage(Api.Failure failure) {
+    String message = failure.getMessage() == null ? "" : failure.getMessage();
+    if (failure.status == 503
+        || message.toLowerCase(Locale.ROOT).matches(".*(api|key|quota|billing).*"))
+      return "Your photo is saved. Identification will be added when the service is available.";
+    return message;
   }
 
   public int importBackup(byte[] bytes, String owner) throws Exception {

@@ -13,8 +13,8 @@ android {
         applicationId 'com.field.logger'
         minSdk 24
         targetSdk 36
-        versionCode 7
-        versionName '2.0.1'
+        versionCode 8
+        versionName '2.1.0'
     }
     signingConfigs {
         release {

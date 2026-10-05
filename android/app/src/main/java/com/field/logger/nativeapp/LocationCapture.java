@@ -61,7 +61,7 @@ public final class LocationCapture {
       } catch (SecurityException | IllegalArgumentException ignored) {
       }
     timeout = this::stop;
-    handler.postDelayed(timeout, 20000);
+    handler.postDelayed(timeout, 45000);
   }
 
   public void stop() {

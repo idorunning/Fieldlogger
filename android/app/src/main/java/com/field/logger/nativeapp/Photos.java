@@ -28,6 +28,7 @@ public final class Photos {
       }
     String id = UUID.randomUUID().toString();
     JSONObject data = Observation.fresh(id, captured);
+    Observation.put(data, "imported", gallery);
     double[] gps = exif.getLatLong();
     if (gps != null && Observation.coords(gps[0], gps[1])) {
       Observation.put(data, "latitude", gps[0]);

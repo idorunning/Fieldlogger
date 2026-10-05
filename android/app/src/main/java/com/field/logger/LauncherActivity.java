@@ -58,7 +58,8 @@ public final class LauncherActivity extends AppCompatActivity {
   private ImageCapture imageCapture;
   private androidx.camera.core.Camera camera;
   private volatile android.location.Location fix;
-  private volatile String gpsPhotoId = "";
+  private final Map<String, Long> pendingLocations = new java.util.concurrent.ConcurrentHashMap<>();
+  private final Map<String, String> scrapbookPages = new HashMap<>();
   private boolean busy = false;
   private ActivityResultLauncher<String> cameraPermission;
   private ActivityResultLauncher<String[]> locationPermission;
@@ -151,6 +152,7 @@ public final class LauncherActivity extends AppCompatActivity {
               if (screen.equals("journal")
                   || screen.equals("collection")
                   || screen.equals("milestones")) reload();
+              else if (screen.equals("archive")) showArchive();
               else if (screen.equals("detail")) {
                 Observation chosen = repo.db.find(selectedId);
                 if (chosen != null) showDetail(chosen);
@@ -189,7 +191,6 @@ public final class LauncherActivity extends AppCompatActivity {
       else if ("map".equals(view)) showMap();
       else if ("collection".equals(view)) showCollection();
       else if ("achievements".equals(view)) showMilestones();
-      if ("api-key".equals(uri.getFragment())) showKeySettings();
     }
   }
 
@@ -204,6 +205,21 @@ public final class LauncherActivity extends AppCompatActivity {
   protected void onResume() {
     super.onResume();
     if (map != null) map.onResume();
+    if (screen.equals("archive")) showArchive();
+    if (locator != null && locator.granted() && repo != null) {
+      List<Observation> recent = new ArrayList<>(repo.db.list(repo.owner()));
+      recent.addAll(repo.db.list("draft:" + repo.owner()));
+      for (Observation r : recent)
+        if (!r.hasGps() && r.data.optBoolean("cameraCapture")) {
+          try {
+            long time = Instant.parse(r.data.optString("capturedAt")).toEpochMilli();
+            if (System.currentTimeMillis() - time >= 0 && System.currentTimeMillis() - time < 45000)
+              pendingLocations.put(r.id(), time);
+          } catch (Exception ignored) {
+          }
+        }
+      if (!pendingLocations.isEmpty()) startGps();
+    }
     if (repo != null
         && (screen.equals("journal") || screen.equals("collection") || screen.equals("milestones")))
       reload();
@@ -378,18 +394,10 @@ public final class LauncherActivity extends AppCompatActivity {
     brand.setContentDescription("Journal home");
     brand.setOnClickListener(v -> showJournal());
     header.addView(brand, new LinearLayout.LayoutParams(0, -2, 1));
-    header.addView(
-        iconButton(
-            "key",
-            "Identification settings",
-            woodland ? PAPER : FOREST,
-            woodland ? 0x30173f35 : 0xffeaf0e1,
-            this::showKeySettings),
-        new LinearLayout.LayoutParams(dp(48), dp(48)));
     View account =
         iconButton(
             "person",
-            repo.owner().equals("guest") ? "Sign in or register" : "Your account",
+            "Your account",
             woodland ? PAPER : FOREST,
             woodland ? 0x30173f35 : 0xffeaf0e1,
             this::showAccount);
@@ -440,7 +448,7 @@ public final class LauncherActivity extends AppCompatActivity {
 
   private void reload() {
     if (body == null) return;
-    records = repo.db.list(repo.owner());
+    records = repo.db.listActive(repo.owner());
     if (screen.equals("journal")) renderJournal();
     else if (screen.equals("collection")) renderCollection();
     else if (screen.equals("milestones")) renderMilestones();
@@ -479,7 +487,7 @@ public final class LauncherActivity extends AppCompatActivity {
     content.setPadding(dp(18), dp(6), dp(18), dp(24));
     LinearLayout heading = row();
     LinearLayout names = column();
-    names.addView(title("Your field journal", 26, PAPER));
+    names.addView(title("Your field journal", 23, PAPER));
     names.addView(
         text(
             records.size() + " " + (records.size() == 1 ? "discovery" : "discoveries"),
@@ -515,13 +523,35 @@ public final class LauncherActivity extends AppCompatActivity {
       content.addView(clear);
       space(content, 12);
     }
+    Map<String, List<Observation>> days = new LinkedHashMap<>();
     int found = 0;
     for (Observation r : records)
       if (matches(r)) {
         found++;
-        content.addView(photoCard(r), new LinearLayout.LayoutParams(-1, dp(400)));
-        space(content, 18);
+        days.computeIfAbsent(r.day(), day -> new ArrayList<>()).add(r);
       }
+    for (Map.Entry<String, List<Observation>> entry : days.entrySet()) {
+      String day = entry.getKey();
+      LinearLayout dateStrip = row();
+      dateStrip.setPadding(dp(12), dp(9), dp(12), dp(9));
+      dateStrip.setBackground(shape(0xeefefbf2, 12));
+      TextView date = title(diaryDate(day), 22, FOREST);
+      date.setTypeface(
+          androidx.core.content.res.ResourcesCompat.getFont(this, R.font.trail_log_wordmark));
+      dateStrip.addView(date, new LinearLayout.LayoutParams(0, -2, 1));
+      dateStrip.addView(text(entry.getValue().size() + " memories", 12, MUTED, false));
+      content.addView(dateStrip);
+      space(content, 10);
+      content.addView(
+          new ScrapbookStack(
+              this,
+              entry.getValue(),
+              scrapbookPages.get(day),
+              this::photoCard,
+              id -> scrapbookPages.put(day, id)),
+          new LinearLayout.LayoutParams(-1, -2));
+      space(content, 18);
+    }
     if (found == 0) {
       LinearLayout empty = column();
       pad(empty, 25);
@@ -550,56 +580,73 @@ public final class LauncherActivity extends AppCompatActivity {
     journalScroll.post(() -> journalScroll.scrollTo(0, scrollY));
   }
 
+  private String diaryDate(String value) {
+    try {
+      LocalDate date = LocalDate.parse(value);
+      return date.format(
+          DateTimeFormatter.ofPattern(
+              date.getYear() == LocalDate.now().getYear() ? "EEEE, d MMMM" : "d MMMM yyyy",
+              Locale.UK));
+    } catch (Exception ignored) {
+      return value;
+    }
+  }
+
   private View photoCard(Observation r) {
-    FrameLayout card = new FrameLayout(this);
-    card.setBackground(shape(FOREST, 24));
-    card.setClipToOutline(true);
-    card.setContentDescription(
-        r.name() + ", " + (r.place().isEmpty() ? "Place not named" : r.place()));
-    card.setFocusable(true);
-    card.setOnClickListener(v -> showDetail(r));
+    LinearLayout paper = column();
+    paper.setBackground(shape(PAPER, 8));
+    paper.setPadding(dp(9), dp(9), dp(9), dp(10));
+    paper.setContentDescription(
+        r.name() + ", " + (r.place().isEmpty() ? "Place name pending" : r.place()));
+    paper.setFocusable(true);
+    paper.setOnClickListener(v -> showDetail(r));
+    FrameLayout photo = new FrameLayout(this);
+    photo.setClipToOutline(true);
+    photo.setBackground(shape(FOREST, 4));
     ImageView image = new ImageView(this);
     image.setScaleType(ImageView.ScaleType.CENTER_CROP);
-    card.addView(image, new FrameLayout.LayoutParams(-1, -1));
+    photo.addView(image, new FrameLayout.LayoutParams(-1, -1));
     Glide.with(this).load(r.photo).into(image);
+    TextView kind = text(r.category().toUpperCase(Locale.UK), 10, PAPER, true);
+    kind.setPadding(dp(10), dp(6), dp(10), dp(6));
+    kind.setBackground(shape(Observation.color(r.category()), 16));
+    FrameLayout.LayoutParams badge =
+        new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START);
+    badge.setMargins(dp(10), dp(10), 0, 0);
+    photo.addView(kind, badge);
+    if (r.pending) {
+      TextView local = text("Saved locally", 10, PAPER, false);
+      pad(local, 7);
+      local.setBackground(shape(0xbb154e45, 15));
+      FrameLayout.LayoutParams status =
+          new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.END);
+      status.setMargins(0, 0, dp(10), dp(10));
+      photo.addView(local, status);
+    }
+    paper.addView(photo, new LinearLayout.LayoutParams(-1, 0, 1));
     LinearLayout caption = column();
-    caption.setPadding(dp(20), dp(60), dp(20), dp(20));
-    caption.setBackground(
-        new GradientDrawable(
-            GradientDrawable.Orientation.TOP_BOTTOM, new int[] {0x00173f35, 0xf006231c}));
-    caption.addView(text(r.name(), 23, PAPER, true));
-    space(caption, 7);
-    caption.addView(
+    caption.setPadding(dp(6), dp(9), dp(6), 0);
+    TextView name = title(r.name(), 23, FOREST);
+    name.setTypeface(
+        androidx.core.content.res.ResourcesCompat.getFont(this, R.font.trail_log_wordmark));
+    name.setMaxLines(1);
+    name.setEllipsize(TextUtils.TruncateAt.END);
+    caption.addView(name);
+    TextView place =
         text(
             "⌖ "
                 + (r.place().isEmpty()
-                    ? (r.hasGps() ? "Place name pending" : "A moment outdoors")
+                    ? (r.hasGps() ? "Adding place name…" : "Location unavailable")
                     : r.place()),
-            14,
-            0xffe3ebdc,
-            false));
-    caption.addView(text(dateLabel(r.data.optString("capturedAt")), 12, 0xffd7e5d0, false));
-    card.addView(caption, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
-    TextView kind =
-        text(
-            r.category().substring(0, 1).toUpperCase(Locale.ROOT) + r.category().substring(1),
             12,
-            PAPER,
-            true);
-    kind.setPadding(dp(12), dp(7), dp(12), dp(7));
-    kind.setBackground(shape(Observation.color(r.category()), 18));
-    FrameLayout.LayoutParams kp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START);
-    kp.setMargins(dp(14), dp(14), dp(14), 0);
-    card.addView(kind, kp);
-    if (r.pending) {
-      TextView status = text("Saved locally", 11, PAPER, false);
-      pad(status, 8);
-      status.setBackground(shape(0xaa173f35, 20));
-      FrameLayout.LayoutParams sp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END);
-      sp.setMargins(0, dp(14), dp(14), 0);
-      card.addView(status, sp);
-    }
-    return card;
+            MUTED,
+            false);
+    place.setMaxLines(1);
+    place.setEllipsize(TextUtils.TruncateAt.END);
+    caption.addView(place);
+    caption.addView(text(StoryCard.when(r), 11, MUTED, false));
+    paper.addView(caption);
+    return paper;
   }
 
   private String dateLabel(String iso) {
@@ -715,7 +762,7 @@ public final class LauncherActivity extends AppCompatActivity {
     String scientific = record.data.optString("scientificName");
     if (!scientific.isEmpty()) details.addView(text(scientific, 17, MUTED, false));
     space(details, 16);
-    details.addView(text(dateLabel(record.data.optString("capturedAt")), 14, MUTED, false));
+    details.addView(text(StoryCard.when(record), 14, MUTED, false));
     details.addView(
         text(
             record.place().isEmpty()
@@ -747,6 +794,12 @@ public final class LauncherActivity extends AppCompatActivity {
     details.addView(shares);
     space(details, 12);
     details.addView(button("Add a note or correct the name", false, () -> editRecord(record)));
+    space(details, 12);
+    details.addView(
+        button(
+            record.archived() ? "Restore to journal" : "Move to archive",
+            false,
+            () -> archiveRecord(record, !record.archived())));
     JSONObject ai = record.data.optJSONObject("identification");
     space(details, 26);
     if (ai == null) {
@@ -754,12 +807,11 @@ public final class LauncherActivity extends AppCompatActivity {
       space(details, 10);
       String why =
           record.error.isEmpty()
-              ? "Your photo is saved. Identification appears after upload when your account has an"
-                  + " OpenAI key."
-              : record.error;
+              ? "Your photo is saved. Its identification will appear after upload."
+              : Repository.identificationMessage(new Api.Failure(0, record.error));
       details.addView(text(why, 16, MUTED, false));
       space(details, 12);
-      details.addView(button("Identification settings", false, this::showKeySettings));
+
     } else {
       details.addView(
           text(
@@ -925,16 +977,61 @@ public final class LauncherActivity extends AppCompatActivity {
   }
 
   private void chooseShare(Observation record) {
+    LinearLayout preview = column();
+    pad(preview, 12);
+    ImageView image = new ImageView(this);
+    image.setAdjustViewBounds(true);
+    image.setScaleType(ImageView.ScaleType.FIT_CENTER);
+    image.setContentDescription("Preview of your branded photo story");
+    preview.addView(image, new LinearLayout.LayoutParams(-1, dp(335)));
     CheckBox location = new CheckBox(this);
     location.setText("Include place name");
-    location.setChecked(false);
-    new AlertDialog.Builder(this)
-        .setTitle("Share photo & story")
-        .setView(location)
-        .setMessage("Exact GPS coordinates are omitted.")
-        .setNegativeButton("Cancel", null)
-        .setPositiveButton("Share", (d, w) -> share(record, true, location.isChecked()))
-        .show();
+    location.setChecked(true);
+    location.setMinHeight(dp(48));
+    preview.addView(location);
+    preview.addView(text("Exact GPS coordinates stay private.", 12, MUTED, false));
+    final int[] generation = {0};
+    final Bitmap[] current = {null};
+    AlertDialog dialog =
+        new AlertDialog.Builder(this)
+            .setTitle("Your photo & story")
+            .setView(scroll(preview))
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Share image", (d, w) -> share(record, true, location.isChecked()))
+            .create();
+    Runnable render =
+        () -> {
+          int request = ++generation[0];
+          boolean place = location.isChecked();
+          Repository.IO.execute(
+              () -> {
+                try {
+                  Bitmap card = StoryCard.render(this, record, place);
+                  runOnUiThread(
+                      () -> {
+                        if (!dialog.isShowing() || request != generation[0]) {
+                          card.recycle();
+                          return;
+                        }
+                        Bitmap old = current[0];
+                        current[0] = card;
+                        image.setImageBitmap(card);
+                        if (old != null) old.recycle();
+                      });
+                } catch (Exception e) {
+                  runOnUiThread(() -> message("Could not preview this photo."));
+                }
+              });
+        };
+    location.setOnCheckedChangeListener((button, checked) -> render.run());
+    dialog.setOnDismissListener(
+        d -> {
+          ++generation[0];
+          image.setImageDrawable(null);
+          if (current[0] != null) current[0].recycle();
+        });
+    dialog.show();
+    render.run();
   }
 
   private void share(Observation record, boolean story, boolean place) {
@@ -951,48 +1048,13 @@ public final class LauncherActivity extends AppCompatActivity {
               while ((n = in.read(buffer)) != -1) out.write(buffer, 0, n);
             }
           } else {
-            Bitmap original = BitmapFactory.decodeFile(record.photo.getAbsolutePath());
-            if (original == null) throw new IOException("Could not open this photo.");
-            int width = 1080;
-            int height =
-                Math.min(
-                    1200, Math.round(width * (float) original.getHeight() / original.getWidth()));
-            String summary = "";
-            JSONObject ai = record.data.optJSONObject("identification");
-            if (ai != null) summary = ai.optString("summary");
-            if (summary.length() > 600) summary = summary.substring(0, 600) + "…";
-            String copy =
-                record.name()
-                    + "\n"
-                    + record.data.optString("scientificName")
-                    + "\n"
-                    + dateLabel(record.data.optString("capturedAt"))
-                    + (place && !record.place().isEmpty() ? "\n" + record.place() : "")
-                    + "\n\n"
-                    + summary
-                    + "\n\nMy Trail Log";
-            TextPaint paint = new TextPaint(3);
-            paint.setColor(FOREST);
-            paint.setTextSize(40);
-            android.text.StaticLayout layout =
-                android.text.StaticLayout.Builder.obtain(copy, 0, copy.length(), paint, width - 100)
-                    .setLineSpacing(10, 1)
-                    .build();
-            Bitmap card =
-                Bitmap.createBitmap(
-                    width, height + layout.getHeight() + 100, Bitmap.Config.ARGB_8888);
-            Canvas c = new Canvas(card);
-            c.drawColor(PAPER);
-            c.drawBitmap(original, null, new Rect(0, 0, width, height), null);
-            c.save();
-            c.translate(50, height + 40);
-            layout.draw(c);
-            c.restore();
+            Bitmap card = StoryCard.render(this, record, place);
             try (FileOutputStream out = new FileOutputStream(file)) {
-              card.compress(Bitmap.CompressFormat.JPEG, 92, out);
+              if (!card.compress(Bitmap.CompressFormat.JPEG, 92, out))
+                throw new IOException("Could not create story image.");
+            } finally {
+              card.recycle();
             }
-            original.recycle();
-            card.recycle();
           }
         },
         () -> {
@@ -1170,7 +1232,7 @@ public final class LauncherActivity extends AppCompatActivity {
     leaveCapture();
     screen = "map";
     frame(false, true);
-    records = repo.db.list(repo.owner());
+    records = repo.db.listActive(repo.owner());
     Configuration.getInstance().setUserAgentValue("MyTrailLog-Android/2.0.1 (fieldlogger.co.uk)");
     Configuration.getInstance().setOsmdroidBasePath(new File(getCacheDir(), "map"));
     Configuration.getInstance().setOsmdroidTileCache(new File(getCacheDir(), "map/tiles"));
@@ -1230,18 +1292,33 @@ public final class LauncherActivity extends AppCompatActivity {
   }
 
   private void showAccount() {
-    if (repo.owner().equals("guest")) {
-      showLogin(false);
-      return;
-    }
     JSONObject user = repo.session.get();
     if (user == null) {
-      showLogin(false);
+      new AlertDialog.Builder(this)
+          .setTitle("Your journal settings")
+          .setItems(
+              new String[] {
+                "Sign in or register",
+                "Archive",
+                "Export journal",
+                "Import web journal backup",
+                "Sources & privacy"
+              },
+              (d, which) -> {
+                if (which == 0) showLogin(false);
+                else if (which == 1) showArchive();
+                else if (which == 2) export.launch("my-trail-log-" + LocalDate.now() + ".json");
+                else if (which == 3)
+                  backupImport.launch(new String[] {"application/json", "text/plain"});
+                else showSources();
+              })
+          .setNegativeButton("Close", null)
+          .show();
       return;
     }
     String[] actions = {
       "Sync now",
-      "Identification settings",
+      "Archive",
       "Export journal",
       "Import web journal backup",
       "Sources & privacy",
@@ -1259,7 +1336,7 @@ public final class LauncherActivity extends AppCompatActivity {
                   message("Uploads queued. Your journal syncs when connected.");
                   break;
                 case 1:
-                  showKeySettings();
+                  showArchive();
                   break;
                 case 2:
                   export.launch("my-trail-log-" + LocalDate.now() + ".json");
@@ -1280,6 +1357,39 @@ public final class LauncherActivity extends AppCompatActivity {
             })
         .setNegativeButton("Close", null)
         .show();
+  }
+
+  private void archiveRecord(Observation record, boolean archive) {
+    if (!repo.db.archive(record.id(), repo.owner(), archive)) {
+      message("This photo is unavailable.");
+      return;
+    }
+    repo.enqueue();
+    if (archive) showJournal();
+    else showArchive();
+    message(archive ? "Moved to Archive in your account settings." : "Restored to your journal.");
+  }
+
+  private void showArchive() {
+    leaveCapture();
+    screen = "archive";
+    frame(false, true);
+    LinearLayout content = column();
+    pad(content, 20);
+    content.addView(title("Your archive", 32, FOREST));
+    space(content, 8);
+    content.addView(
+        text("Kept safely. Tap a memory to restore it to your journal.", 15, MUTED, false));
+    space(content, 16);
+    List<Observation> archived = repo.db.listArchive(repo.owner());
+    if (archived.isEmpty()) content.addView(text("No archived memories yet.", 17, FOREST, false));
+    for (Observation r : archived) {
+      content.addView(photoCard(r), new LinearLayout.LayoutParams(-1, dp(345)));
+      space(content, 12);
+      content.addView(button("Restore " + r.name(), false, () -> archiveRecord(r, false)));
+      space(content, 22);
+    }
+    body.addView(scroll(content), new FrameLayout.LayoutParams(-1, -1));
   }
 
   private void showLogin(boolean register) {
@@ -1371,126 +1481,6 @@ public final class LauncherActivity extends AppCompatActivity {
     dialog.show();
   }
 
-  private void showKeySettings() {
-    if (repo.owner().equals("guest")) {
-      showLogin(false);
-      return;
-    }
-    JSONObject user = repo.session.get();
-    if (user == null) return;
-    String owner = user.optString("id"), cookie = user.optString("cookie");
-    async(
-        () -> {
-          JSONObject status = repo.api.json("/api/settings/openai-key", "GET", cookie, null);
-          runOnUiThread(
-              () -> {
-                if (!repo.owner().equals(owner)) return;
-                LinearLayout form = column();
-                pad(form, 20);
-                form.addView(
-                    text(
-                        status.optBoolean("hasKey")
-                            ? "Your account already has an OpenAI key. It also works in the native"
-                                + " app."
-                            : "Connect your OpenAI key for photo identification. It is encrypted on"
-                                + " the server and never stored in the app.",
-                        16,
-                        FOREST,
-                        false));
-                EditText key = input("Paste API key", "", false);
-                key.setInputType(
-                    android.text.InputType.TYPE_CLASS_TEXT
-                        | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
-                if (Build.VERSION.SDK_INT >= 26)
-                  key.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
-                labeled(form, "Replace or add key", key);
-                space(form, 14);
-                form.addView(
-                    text(
-                        "OpenAI charges your API account for identification and connection tests.",
-                        13,
-                        MUTED,
-                        false));
-                AlertDialog dialog =
-                    new AlertDialog.Builder(this)
-                        .setTitle("Photo identification")
-                        .setView(scroll(form))
-                        .setNegativeButton("Close", null)
-                        .setPositiveButton("Save key", null)
-                        .create();
-                if (status.optBoolean("hasKey")) {
-                  space(form, 16);
-                  form.addView(
-                      button(
-                          "Test connection",
-                          false,
-                          () ->
-                              async(
-                                  () ->
-                                      repo.api.json(
-                                          "/api/settings/openai-key/test",
-                                          "POST",
-                                          cookie,
-                                          new JSONObject()),
-                                  () -> message("Connected. Photo identification is ready."))));
-                  space(form, 10);
-                  form.addView(
-                      button(
-                          "Remove saved key",
-                          false,
-                          () ->
-                              new AlertDialog.Builder(this)
-                                  .setTitle("Remove identification key?")
-                                  .setMessage("Your journal photos remain saved.")
-                                  .setNegativeButton("Cancel", null)
-                                  .setPositiveButton(
-                                      "Remove",
-                                      (d, w) ->
-                                          async(
-                                              () ->
-                                                  repo.api.json(
-                                                      "/api/settings/openai-key",
-                                                      "DELETE",
-                                                      cookie,
-                                                      null),
-                                              () -> {
-                                                dialog.dismiss();
-                                                message("Key removed.");
-                                              }))
-                                  .show()));
-                }
-                dialog.setOnShowListener(
-                    v ->
-                        dialog
-                            .getButton(AlertDialog.BUTTON_POSITIVE)
-                            .setOnClickListener(
-                                view -> {
-                                  String secret = key.getText().toString().trim();
-                                  if (!secret.matches("sk-[A-Za-z0-9_-]{16,1000}")) {
-                                    message("Enter an OpenAI API key beginning with sk-.");
-                                    return;
-                                  }
-                                  key.setText("");
-                                  JSONObject value = new JSONObject();
-                                  Observation.put(value, "apiKey", secret);
-                                  async(
-                                      () ->
-                                          repo.api.json(
-                                              "/api/settings/openai-key", "PUT", cookie, value),
-                                      () -> {
-                                        dialog.dismiss();
-                                        repo.enqueue();
-                                        message(
-                                            "Key saved. Pending photos will be identified when"
-                                                + " connected.");
-                                      });
-                                }));
-                dialog.show();
-              });
-        },
-        () -> {});
-  }
-
   private void deleteAccount() {
     EditText password = input("Confirm password", "", false);
     password.setInputType(
@@ -1547,9 +1537,9 @@ public final class LauncherActivity extends AppCompatActivity {
     section(
         content,
         "Your photos. Your journal.",
-        "My Trail Log saves photos, dates, notes and optional GPS in its own private Android"
-            + " database and files. Your session is encrypted using Android Keystore. Passwords and"
-            + " API keys are not kept in the app. Location is requested during camera capture,"
+        "My Trail Log saves photos, dates, notes and automatic camera GPS in its own private"
+            + " Android database and files. Your session is encrypted using Android Keystore."
+            + " Passwords are not kept in the app. Location is requested during camera capture,"
             + " never as continuous walking history.");
     section(
         content,
@@ -1562,7 +1552,7 @@ public final class LauncherActivity extends AppCompatActivity {
     section(
         content,
         "Identification",
-        "OpenAI receives the resized photo and capture context when you connect an account key."
+        "OpenAI receives the resized photo and capture context for identification."
             + " Suggestions can be mistaken. Wikipedia and GBIF provide named reference material."
             + " Optional specialist classifiers depend on server configuration. Avoid using"
             + " identification to decide whether a plant or fungus is safe to eat.");
@@ -1577,8 +1567,9 @@ public final class LauncherActivity extends AppCompatActivity {
         content,
         "Sharing",
         "Sharing opens Android’s chooser only when you ask. Photo files are resized and have EXIF"
-            + " removed. Story cards omit exact GPS; place names are included only if selected."
-            + " Journal exports contain original saved coordinates and should be kept private.");
+            + " removed. Branded story images include the place name by default, with a preview to"
+            + " hide it. Exact GPS stays private. Journal exports contain original saved"
+            + " coordinates and should be kept private.");
     space(content, 20);
     content.addView(button("Wikipedia", false, () -> openReference("https://www.wikipedia.org")));
     space(content, 8);
@@ -1652,7 +1643,6 @@ public final class LauncherActivity extends AppCompatActivity {
     if (busy) return;
     locator.stop();
     fix = null;
-    gpsPhotoId = "";
     String owner = repo.owner();
     async(
         () -> {
@@ -1664,6 +1654,7 @@ public final class LauncherActivity extends AppCompatActivity {
             }
             draft = Photos.prepare(file, owner, repo, true);
             persistDraft();
+            resolvePlace(draft.id());
           } finally {
             file.delete();
           }
@@ -1725,7 +1716,6 @@ public final class LauncherActivity extends AppCompatActivity {
     }
     locator.stop();
     fix = null;
-    gpsPhotoId = "";
     screen = "camera";
     frame(false, false);
     shell.setBackgroundColor(android.graphics.Color.BLACK);
@@ -1845,24 +1835,57 @@ public final class LauncherActivity extends AppCompatActivity {
     locator.start(
         location -> {
           fix = location;
-          String id = gpsPhotoId;
-          if (!id.isEmpty())
+          long now = System.currentTimeMillis();
+          for (Map.Entry<String, Long> pending : pendingLocations.entrySet()) {
+            if (now - pending.getValue() > 45000) {
+              pendingLocations.remove(pending.getKey());
+              continue;
+            }
+            if (Math.abs(location.getTime() - pending.getValue()) > 45000) continue;
+            String id = pending.getKey();
             Repository.IO.execute(
                 () -> {
                   repo.db.enrichGps(id, location);
+                  resolvePlace(id);
                   repo.enqueue();
                   runOnUiThread(
                       () -> {
-                        if (screen.equals("review")) showReview();
+                        if (screen.equals("review") && draft != null && draft.id().equals(id))
+                          showReview();
                         else if (screen.equals("journal")) reload();
                       });
                 });
+          }
+        });
+  }
+
+  private void resolvePlace(String id) {
+    Repository.IO.execute(
+        () -> {
+          Observation r = repo.db.find(id);
+          if (r == null || !r.hasGps() || !r.place().isBlank()) return;
+          try {
+            String place = repo.place(r.data.optDouble("latitude"), r.data.optDouble("longitude"));
+            if (!place.isBlank())
+              repo.db.enrichPlace(
+                  id, r.data.optDouble("latitude"), r.data.optDouble("longitude"), place);
+            else repo.enqueue();
+            runOnUiThread(
+                () -> {
+                  if (screen.equals("review") && draft != null && draft.id().equals(id))
+                    showReview();
+                  else if (screen.equals("journal")) reload();
+                });
+          } catch (Exception ignored) {
+            repo.enqueue();
+          }
         });
   }
 
   private void takePhoto() {
     if (imageCapture == null || busy) return;
     busy = true;
+    final long capturedMillis = System.currentTimeMillis();
     startGps();
     String owner = repo.owner();
     File file;
@@ -1881,18 +1904,39 @@ public final class LauncherActivity extends AppCompatActivity {
           public void onImageSaved(ImageCapture.OutputFileResults result) {
             try {
               draft = Photos.prepare(file, owner, repo, false);
-              if (fix != null && !draft.hasGps()) {
-                Observation.put(draft.data, "latitude", fix.getLatitude());
-                Observation.put(draft.data, "longitude", fix.getLongitude());
-                Observation.put(draft.data, "accuracy", (double) fix.getAccuracy());
+              Observation.put(draft.data, "cameraCapture", true);
+              ZonedDateTime taken =
+                  Instant.ofEpochMilli(capturedMillis).atZone(ZoneId.systemDefault());
+              Observation.put(draft.data, "capturedAt", taken.toInstant().toString());
+              Observation.put(draft.data, "localDate", taken.toLocalDate().toString());
+              Observation.put(draft.data, "localHour", taken.getHour());
+              android.location.Location captureFix = fix;
+              if (captureFix != null
+                  && Math.abs(captureFix.getTime() - capturedMillis) <= 30000
+                  && !draft.hasGps()) {
+                Observation.put(draft.data, "latitude", captureFix.getLatitude());
+                Observation.put(draft.data, "longitude", captureFix.getLongitude());
+                Observation.put(draft.data, "accuracy", (double) captureFix.getAccuracy());
                 Observation.put(draft.data, "locationSource", "gps");
               }
               persistDraft();
-              gpsPhotoId = draft.id();
+              pendingLocations.put(draft.id(), capturedMillis);
+              android.location.Location lateFix = fix;
+              if (lateFix != null && Math.abs(lateFix.getTime() - capturedMillis) <= 30000)
+                repo.db.enrichGps(draft.id(), lateFix);
+              resolvePlace(draft.id());
               runOnUiThread(
                   () -> {
                     busy = false;
                     showReview();
+                    String capturedId = draft.id();
+                    root.postDelayed(
+                        () -> {
+                          if (screen.equals("review")
+                              && draft != null
+                              && draft.id().equals(capturedId)) showReview();
+                        },
+                        45000);
                   });
             } catch (Exception e) {
               runOnUiThread(
@@ -1921,6 +1965,17 @@ public final class LauncherActivity extends AppCompatActivity {
     if (cameraProvider != null) cameraProvider.unbindAll();
     imageCapture = null;
     camera = null;
+  }
+
+  private boolean recentCapture(Observation record) {
+    try {
+      return Math.abs(
+              System.currentTimeMillis()
+                  - Instant.parse(record.data.optString("capturedAt")).toEpochMilli())
+          < 45000;
+    } catch (Exception ignored) {
+      return false;
+    }
   }
 
   private void showReview() {
@@ -1952,8 +2007,14 @@ public final class LauncherActivity extends AppCompatActivity {
     details.addView(
         text(
             draft.hasGps()
-                ? "GPS attached · place name fills when online"
-                : "GPS is optional. You can save immediately.",
+                ? (draft.place().isBlank()
+                    ? "Location saved · adding place name automatically"
+                    : "⌖ " + draft.place())
+                : (draft.data.optBoolean("imported")
+                    ? "This gallery photo has no saved location."
+                    : locator.granted() && recentCapture(draft)
+                        ? "Finding location automatically. You can save now."
+                        : "Location unavailable · your photo is kept safely."),
             14,
             MUTED,
             false));
@@ -1972,12 +2033,12 @@ public final class LauncherActivity extends AppCompatActivity {
                         "Discard",
                         (d, w) -> {
                           if (draft != null) {
+                            pendingLocations.remove(draft.id());
                             repo.db.remove(draft.id());
                             draft.photo.delete();
                             draft = null;
                           }
                           locator.stop();
-                          gpsPhotoId = "";
                           showJournal();
                         })
                     .show()));
@@ -2002,22 +2063,6 @@ public final class LauncherActivity extends AppCompatActivity {
     labeled(form, "Kind", kind);
     labeled(form, "Place", place);
     labeled(form, "Note", note);
-    space(form, 14);
-    form.addView(
-        button(
-            locator.granted() ? "Update GPS" : "Allow location for photos",
-            false,
-            () -> {
-              if (locator.granted()) startGps();
-              else {
-                afterLocation = this::startGps;
-                locationPermission.launch(
-                    new String[] {
-                      Manifest.permission.ACCESS_FINE_LOCATION,
-                      Manifest.permission.ACCESS_COARSE_LOCATION
-                    });
-              }
-            }));
     new AlertDialog.Builder(this)
         .setTitle("Add details")
         .setView(scroll(form))

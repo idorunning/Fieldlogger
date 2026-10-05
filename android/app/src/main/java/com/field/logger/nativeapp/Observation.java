@@ -36,6 +36,23 @@ public final class Observation {
     return data.optString("place");
   }
 
+  public boolean archived() {
+    return data.optBoolean("archived", false);
+  }
+
+  public String day() {
+    String day = data.optString("localDate");
+    if (!day.isEmpty()) return day;
+    try {
+      return Instant.parse(data.optString("capturedAt"))
+          .atZone(ZoneId.of(data.optString("timezone", ZoneId.systemDefault().getId())))
+          .toLocalDate()
+          .toString();
+    } catch (Exception ignored) {
+      return "Undated";
+    }
+  }
+
   public boolean hasGps() {
     return coords(data.opt("latitude"), data.opt("longitude"));
   }
@@ -83,6 +100,7 @@ public final class Observation {
     for (String key : new String[] {"place", "note", "name", "scientificName"}) put(data, key, "");
     put(data, "category", "other");
     put(data, "confirmed", false);
+    put(data, "archived", false);
     put(data, "analysisState", "pending");
     put(data, "updatedAt", Instant.now().toString());
     put(data, "revision", 1);

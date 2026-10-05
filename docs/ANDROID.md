@@ -1,12 +1,12 @@
 # My Trail Log native Android release
 
-Package **com.field.logger**, version **2.0.1**, version code **7**. Minimum Android 7/API 24; target and compile SDK 36. The existing upload signing key is reused.
+Package **com.field.logger**, version **2.1.0**, version code **8**. Minimum Android 7/API 24; target and compile SDK 36. The existing upload signing key is reused.
 
 This release replaces the Trusted Web Activity with an Android interface written with AppCompat views. It has no WebView, browser launcher or downloaded HTML/JavaScript interface. CameraX provides camera preview, capture, tap-to-focus, pinch zoom and flash control. The app uses its own SQLite database and app-private photo files. WorkManager schedules connection-dependent background uploads and periodic retries; Android controls exact execution timing.
 
 ## Behaviour
 
-- Home is a native photo journal over the bundled woodland photograph. Native bottom navigation: Journal, Map, Camera, Collection and Milestones.
+- Home is a dated diary over the bundled woodland photograph, with overlapping paper photo stacks, horizontal swipes, accessible page-turn buttons and light haptics. Vertical scrolling moves between days. Native bottom navigation: Journal, Map, Camera, Collection and Milestones.
 - Photos are resized to JPEG and EXIF removed, while original capture time and embedded GPS are saved separately. Gallery photos without EXIF are not assigned the phone's current coordinates.
 - Camera and foreground location grants are reused. Location requests stop after a short capture window; there is no background location permission or continuous walk tracking.
 - A late GPS fix updates the captured discovery, including after saving. Nearby place names use the existing Photon/OpenStreetMap server endpoint, with local caching and reconnect retries. Entered place names are preserved.
@@ -14,6 +14,9 @@ This release replaces the Trusted Web Activity with an Android interface written
 - Uploaded discoveries download through the same account. Each local record is separated by account. Upload completions and remote merges cannot replace newer pending edits.
 - Native discovery detail, corrections, notes, date/place filters, category collection, species statistics, milestones, OpenStreetMap map, image sharing and story sharing are included. Exact GPS is omitted from shared story cards.
 - A partially captured photo is retained as a draft and can be resumed or discarded after returning to Camera.
+- Archive keeps photos, notes, dates and coordinates while removing them from the active journal, map and counts. Restore through Archive in account settings; archives sync and remain in exports. Older clients that omit the archive flag cannot inadvertently restore it.
+- Photo & story creates a 1080×1350 branded JPEG with a large photo, category, short summary, interesting saved context, capture time and place by default. A preview can hide the place; precise GPS and EXIF are omitted.
+- The native app has no key icon, credential entry or service-key wording. Existing server configuration is retained; account administration remains on the desktop website.
 - Account settings provide JSON export/import and account deletion. Public references open their respective websites only when selected.
 
 ## Moving from the web app
@@ -32,7 +35,7 @@ Run `android/gradlew testDebugUnitTest` from the Android project. The framework 
 
 ## Google Play
 
-Upload **my-trail-log-2.0.1-play.aab** to the existing application and testing track. Package and upload key match prior releases; Play signs installed updates with the account's existing app-signing key. The separately delivered direct APK uses the upload key and cannot update a Play-signed installation.
+Upload **my-trail-log-2.1.0-play.aab** to the existing application and testing track. Package and upload key match prior releases; Play signs installed updates with the account's existing app-signing key. The separately delivered direct APK uses the upload key and cannot update a Play-signed installation.
 
 Review Data safety for the native release: account details, photos, capture times, optional foreground location, background upload and optional OpenAI analysis. Keep the privacy and deletion URLs. Test camera/location denial, capture, offline reopen, reconnect, signing into the existing account and sharing on the Pixel before promoting the test release. The workspace's release report distinguishes automated checks from physical-phone checks.
 

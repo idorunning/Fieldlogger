@@ -173,4 +173,54 @@ public class JournalDbTest {
     assertEquals(1, db.list(owner).size());
     assertTrue(db.list("draft:" + owner).isEmpty());
   }
+
+  @Test
+  public void archiveIsReversibleOwnerScopedAndKeptInSyncData() {
+    Observation r = record();
+    Observation.put(r.data, "latitude", 51d);
+    Observation.put(r.data, "longitude", -1d);
+    Observation.put(r.data, "place", "Oxford");
+    Observation.put(r.data, "note", "Keep this memory");
+    db.save(r);
+    assertFalse(db.archive(r.id(), "someone-else", true));
+    assertTrue(db.archive(r.id(), owner, true));
+    assertTrue(db.listActive(owner).isEmpty());
+    assertEquals(1, db.listArchive(owner).size());
+    Observation archived = db.find(r.id());
+    assertTrue(archived.archived());
+    assertTrue(archived.hasGps());
+    assertTrue(archived.pending);
+    assertEquals(r.photo, archived.photo);
+    assertEquals("Keep this memory", archived.data.optString("note"));
+    assertEquals("Oxford", archived.place());
+    assertEquals(1, db.list(owner).size());
+    assertFalse(db.markUploaded(r.id(), r.revision(), owner));
+    db.mergeAnalysis(r.id(), owner, new JSONObject());
+    assertTrue(db.find(r.id()).archived());
+    assertTrue(db.markUploaded(r.id(), archived.revision(), owner));
+    JSONObject remote = Observation.copy(db.find(r.id()).data);
+    assertTrue(db.mergeRemote(remote, owner, r.photo));
+    assertTrue(db.find(r.id()).archived());
+    assertTrue(db.archive(r.id(), owner, false));
+    assertEquals(1, db.listActive(owner).size());
+    assertTrue(db.listArchive(owner).isEmpty());
+  }
+
+  @Test
+  public void diaryUsesOriginalLocalDayAcrossTimezones() {
+    Observation r = record();
+    Observation.put(r.data, "capturedAt", "2026-10-04T23:30:00Z");
+    Observation.put(r.data, "timezone", "Europe/London");
+    Observation.put(r.data, "localDate", "2026-10-05");
+    assertEquals("2026-10-05", r.day());
+    assertEquals("5 Oct 2026 · 00:30", StoryCard.when(r));
+  }
+
+  @Test
+  public void missingServiceConfigurationNeverAppearsAsAKeyPrompt() {
+    assertFalse(
+        Repository.identificationMessage(new Api.Failure(503, "Set an OpenAI API key"))
+            .toLowerCase()
+            .contains("key"));
+  }
 }

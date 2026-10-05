@@ -70,6 +70,28 @@ public final class JournalDb extends SQLiteOpenHelper {
     }
   }
 
+  public synchronized List<Observation> listActive(String owner) {
+    List<Observation> result = list(owner);
+    result.removeIf(Observation::archived);
+    return result;
+  }
+
+  public synchronized List<Observation> listArchive(String owner) {
+    List<Observation> result = list(owner);
+    result.removeIf(r -> !r.archived());
+    return result;
+  }
+
+  public synchronized boolean archive(String id, String owner, boolean archived) {
+    Observation latest = find(id);
+    if (latest == null || !latest.owner.equals(owner)) return false;
+    if (latest.archived() == archived) return true;
+    JSONObject data = Observation.copy(latest.data);
+    Observation.put(data, "archived", archived);
+    edit(latest, data);
+    return true;
+  }
+
   public synchronized void save(Observation r) {
     ContentValues v = new ContentValues();
     v.put("id", r.id());

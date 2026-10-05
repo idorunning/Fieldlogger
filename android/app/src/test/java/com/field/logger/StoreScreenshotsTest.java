@@ -60,7 +60,7 @@ public class StoreScreenshotsTest {
         "field-robin.jpg",
         "2026-10-05T09:45:00Z"
       },
-      {"fox", "Red fox", "Vulpes vulpes", "animals", "field-fox.jpg", "2026-10-04T15:20:00Z"},
+      {"fox", "Red fox", "Vulpes vulpes", "animals", "field-fox.jpg", "2026-10-05T08:20:00Z"},
       {"woodland", "Woodland canopy", "", "landmarks", "woodland.jpg", "2026-10-03T11:10:00Z"}
     };
     File publicDir = new File(System.getenv("MYTRAILLOG_PHOTO_DIR"));
@@ -77,14 +77,37 @@ public class StoreScreenshotsTest {
       Observation.put(data, "category", example[3]);
       Observation.put(data, "place", "Example woodland");
       Observation.put(data, "confirmed", true);
-      Observation.put(data, "analysisState", "done");
+      Observation.put(data, "analysisState", "complete");
       Observation.put(data, "note", "Example journal entry · licensed demonstration photograph.");
+      JSONObject ai = new JSONObject();
+      Observation.put(ai, "confidence", "medium");
+      Observation.put(
+          ai,
+          "summary",
+          example[0].equals("robin")
+              ? "A small songbird with a bright orange breast, often seen around woodland edges and"
+                    + " gardens."
+              : "A moment from the woodland, saved in my trail journal.");
+      Observation.put(
+          ai,
+          "seasonalContext",
+          "Robins can sing through autumn, when many other birds become quieter.");
+      Observation.put(data, "identification", ai);
       repo.db.save(new Observation(data, owner, photo, true, ""));
     }
     try (ActivityController<LauncherActivity> controller =
         Robolectric.buildActivity(LauncherActivity.class).setup().visible()) {
       LauncherActivity app = controller.get();
       render(app, "01-journal.png");
+      Bitmap story = StoryCard.render(context, repo.db.find("store-demo-robin"), true);
+      File storyFile =
+          new File(
+              new File(System.getenv("MYTRAILLOG_SCREENSHOT_DIR")).getParentFile(),
+              "story-example.png");
+      try (FileOutputStream out = new FileOutputStream(storyFile)) {
+        story.compress(Bitmap.CompressFormat.PNG, 100, out);
+      }
+      story.recycle();
       Method detail = LauncherActivity.class.getDeclaredMethod("showDetail", Observation.class);
       detail.setAccessible(true);
       detail.invoke(app, repo.db.find("store-demo-robin"));
@@ -93,7 +116,7 @@ public class StoreScreenshotsTest {
       render(app, "05-discovery-notes-sharing.png");
       invoke(app, "showJournal");
       render(app, "01-journal.png");
-      findScroll(app.findViewById(android.R.id.content)).scrollTo(0, 1254);
+      findScroll(app.findViewById(android.R.id.content)).scrollTo(0, 1100);
       render(app, "06-journal-wildlife.png");
       invoke(app, "showCollection");
       render(app, "03-collection.png");
