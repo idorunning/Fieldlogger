@@ -46,7 +46,7 @@ const responseSchema = {
 };
 async function getJSON(url: string) {
   const res = await fetch(url, {
-    headers: { "User-Agent": "Fieldnotes/0.1 (personal nature journal)" },
+    headers: { "User-Agent": "FieldLogger/0.1 (personal nature journal)" },
     signal: AbortSignal.timeout(9000),
   });
   if (!res.ok) throw new Error("Reference unavailable");

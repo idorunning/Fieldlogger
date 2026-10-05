@@ -1,6 +1,6 @@
 # API-key settings
 
-Open `/#api-key`, sign in or create a Fieldnotes journal account, and paste an OpenAI API key into the masked field. **Save key** explicitly enables the account's pending photo analysis. **Test connection** sends a small billed Responses request with the configured model. A successful save alone does not prove validity or permissions. The same screen replaces or removes a key. Removal does not revoke it at OpenAI.
+Open `/#api-key`, sign in or create a Field Logger journal account, and paste an OpenAI API key into the masked field. **Save key** explicitly enables the account's pending photo analysis. **Test connection** sends a small billed Responses request with the configured model. A successful save alone does not prove validity or permissions. The same screen replaces or removes a key. Removal does not revoke it at OpenAI.
 
 Keys that expire after 20 minutes are useful for a short test, but they remain credentials until expiry. Never send them in chat. Expired, revoked and invalid keys return an actionable message; photo storage and offline journaling keep working. Enter a replacement in settings to resume pending identification.
 

@@ -1,4 +1,4 @@
-# Fieldnotes
+# Field Logger
 
 A mobile-first personal countryside discovery journal: photograph something, save the moment and place, then explore what it might be. The product rewards variety and curiosity, not distance or walking totals.
 

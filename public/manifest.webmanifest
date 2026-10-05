@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "Fieldnotes — Discovery journal",
-  "short_name": "Fieldnotes",
+  "name": "Field Logger — Discovery journal",
+  "short_name": "Field Logger",
   "description": "A world worth noticing. Your personal countryside discovery journal.",
   "start_url": "/",
   "scope": "/",

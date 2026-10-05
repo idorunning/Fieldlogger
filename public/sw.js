@@ -1,5 +1,5 @@
 /* App shell and original photos are separate: API responses are never cached. */
-const CACHE = "fieldnotes-shell-v2";
+const CACHE = "fieldnotes-shell-v3";
 const SHELL = [
   "/",
   "/favicon.svg",
@@ -62,7 +62,7 @@ self.addEventListener("fetch", (event) => {
           return (
             (await caches.match("/")) ||
             new Response(
-              "Open Fieldnotes online once to save it for offline use.",
+              "Open Field Logger online once to save it for offline use.",
               { headers: { "Content-Type": "text/plain" } },
             )
           );

@@ -509,7 +509,7 @@ function Detail({
         bitmap.close();
         ctx.fillStyle = "#173f35";
         ctx.font = "bold 24px sans-serif";
-        ctx.fillText("FIELDNOTES  /  A LITTLE DISCOVERY", 60, 874);
+        ctx.fillText("FIELD LOGGER  /  A LITTLE DISCOVERY", 60, 874);
         ctx.font = "42px Georgia";
         wrap(ctx, record.name || "A little mystery", 60, 938, 960, 50, 2);
         ctx.font = "italic 26px Georgia";
@@ -538,8 +538,8 @@ function Detail({
         ctx.fillStyle = "#667168";
         ctx.fillText(
           identification
-            ? "AI identification suggestion · Fieldnotes"
-            : "My countryside field journal · Fieldnotes",
+            ? "AI identification suggestion · Field Logger"
+            : "My countryside field journal · Field Logger",
           60,
           1375,
         );
@@ -549,7 +549,7 @@ function Detail({
       }
       const file = new File(
         [blob],
-        `fieldnotes-${record.id}.${withInfo ? "png" : "jpg"}`,
+        `fieldlogger-${record.id}.${withInfo ? "png" : "jpg"}`,
         { type: blob.type },
       );
       if (navigator.canShare?.({ files: [file] })) {
@@ -1203,7 +1203,7 @@ export default function Fieldnotes() {
           ],
           { type: "application/json" },
         ),
-        `fieldnotes-${localDate(new Date())}.json`,
+        `fieldlogger-${localDate(new Date())}.json`,
       );
       toast(
         "Journal backup downloaded, including photos and GPS. Keep it somewhere private.",
@@ -1235,7 +1235,7 @@ export default function Fieldnotes() {
             <Leaf size={25} />
           </span>
           <span>
-            fieldnotes<small>A WORLD WORTH NOTICING</small>
+            Field Logger<small>A WORLD WORTH NOTICING</small>
           </span>
         </a>
         <p className="nav-label">YOUR EXPLORATIONS</p>
@@ -1293,7 +1293,7 @@ export default function Fieldnotes() {
         <header className="topbar">
           <a href="/" className="mobile-brand">
             <Leaf size={22} />
-            fieldnotes
+            Field Logger
           </a>
           <div className="breadcrumb">
             My little corner of the world <span>/</span>{" "}
@@ -1362,7 +1362,7 @@ export default function Fieldnotes() {
                       day: "numeric",
                       month: "long",
                     })
-                  : "FIELDNOTES / YOUR EXPLORATIONS"}
+                  : "FIELD LOGGER / YOUR EXPLORATIONS"}
               </p>
               <h1>{title}</h1>
               <p className="muted">{subtitle}</p>
@@ -1914,7 +1914,7 @@ export default function Fieldnotes() {
                   <h2>A companion to your curiosity</h2>
                   <p>
                     A photograph can suggest an identity. Reference sources help
-                    explain it. Your own observations help settle it. Fieldnotes
+                    explain it. Your own observations help settle it. Field Logger
                     keeps all three visible.
                   </p>
                 </div>
@@ -1964,7 +1964,7 @@ export default function Fieldnotes() {
                 {
                   name: "iNaturalist",
                   role: "Community and biodiversity reference",
-                  text: "Useful for comparing community observations. Its full classification model remains private; the public API and open-source server are not a free unlimited identification service. Fieldnotes does not publish your observations there.",
+                  text: "Useful for comparing community observations. Its full classification model remains private; the public API and open-source server are not a free unlimited identification service. Field Logger does not publish your observations there.",
                   url: "https://github.com/inaturalist/inatVisionAPI",
                   state: "Research reference",
                 },
