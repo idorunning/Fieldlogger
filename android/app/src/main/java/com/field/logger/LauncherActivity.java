@@ -35,11 +35,11 @@ import org.osmdroid.util.GeoPoint;
 import org.osmdroid.views.MapView;
 import org.osmdroid.views.overlay.*;
 
-/** Field Logger's native Android interface. No WebView, browser activity or remote UI. */
+/** My Trail Log's native Android interface. No WebView, browser activity or remote UI. */
 public final class LauncherActivity extends AppCompatActivity {
-  private static final int FOREST = 0xff173f35,
-      PAPER = 0xfff8f9f4,
-      LIME = 0xffd7e9a2,
+  private static final int FOREST = 0xff154e45,
+      PAPER = 0xfffffdf7,
+      LIME = 0xfff0dc7a,
       MUTED = 0xff728070;
   private Repository repo;
   private LocationCapture locator;
@@ -370,7 +370,11 @@ public final class LauncherActivity extends AppCompatActivity {
     LinearLayout header = row();
     header.setPadding(dp(18), dp(8), dp(18), dp(8));
     header.setMinimumHeight(dp(68));
-    TextView brand = title("Field Logger", 25, woodland ? PAPER : FOREST);
+    TextView brand = title("My Trail Log", 27, woodland ? PAPER : FOREST);
+    brand.setTypeface(
+        androidx.core.content.res.ResourcesCompat.getFont(this, R.font.trail_log_wordmark));
+    brand.setMaxLines(1);
+    brand.setEllipsize(android.text.TextUtils.TruncateAt.END);
     brand.setContentDescription("Journal home");
     brand.setOnClickListener(v -> showJournal());
     header.addView(brand, new LinearLayout.LayoutParams(0, -2, 1));
@@ -966,7 +970,7 @@ public final class LauncherActivity extends AppCompatActivity {
                     + (place && !record.place().isEmpty() ? "\n" + record.place() : "")
                     + "\n\n"
                     + summary
-                    + "\n\nField Logger";
+                    + "\n\nMy Trail Log";
             TextPaint paint = new TextPaint(3);
             paint.setColor(FOREST);
             paint.setTextSize(40);
@@ -1001,7 +1005,7 @@ public final class LauncherActivity extends AppCompatActivity {
                   .setType("image/jpeg")
                   .putExtra(Intent.EXTRA_STREAM, uri)
                   .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-          intent.setClipData(ClipData.newRawUri("Field Logger photo", uri));
+          intent.setClipData(ClipData.newRawUri("My Trail Log photo", uri));
           startActivity(Intent.createChooser(intent, "Share your discovery"));
         });
   }
@@ -1167,7 +1171,7 @@ public final class LauncherActivity extends AppCompatActivity {
     screen = "map";
     frame(false, true);
     records = repo.db.list(repo.owner());
-    Configuration.getInstance().setUserAgentValue("FieldLogger-Android/2.0.0 (fieldlogger.co.uk)");
+    Configuration.getInstance().setUserAgentValue("MyTrailLog-Android/2.0.1 (fieldlogger.co.uk)");
     Configuration.getInstance().setOsmdroidBasePath(new File(getCacheDir(), "map"));
     Configuration.getInstance().setOsmdroidTileCache(new File(getCacheDir(), "map/tiles"));
     map = new MapView(this);
@@ -1258,7 +1262,7 @@ public final class LauncherActivity extends AppCompatActivity {
                   showKeySettings();
                   break;
                 case 2:
-                  export.launch("fieldlogger-" + LocalDate.now() + ".json");
+                  export.launch("my-trail-log-" + LocalDate.now() + ".json");
                   break;
                 case 3:
                   backupImport.launch(new String[] {"application/json", "text/plain"});
@@ -1283,7 +1287,7 @@ public final class LauncherActivity extends AppCompatActivity {
     pad(form, 20);
     form.addView(
         text(
-            "Use your existing Field Logger account to bring your uploaded photos into the native"
+            "Use your existing My Trail Log account to bring your uploaded photos into the native"
                 + " app.",
             16,
             MUTED,
@@ -1543,7 +1547,7 @@ public final class LauncherActivity extends AppCompatActivity {
     section(
         content,
         "Your photos. Your journal.",
-        "Field Logger saves photos, dates, notes and optional GPS in its own private Android"
+        "My Trail Log saves photos, dates, notes and optional GPS in its own private Android"
             + " database and files. Your session is encrypted using Android Keystore. Passwords and"
             + " API keys are not kept in the app. Location is requested during camera capture,"
             + " never as continuous walking history.");
@@ -1676,7 +1680,7 @@ public final class LauncherActivity extends AppCompatActivity {
     new AlertDialog.Builder(this)
         .setTitle("Camera access")
         .setMessage(
-            "Allow Camera in Field Logger’s Android settings to take photos. You can also choose a"
+            "Allow Camera in My Trail Log’s Android settings to take photos. You can also choose a"
                 + " photo from your gallery.")
         .setNegativeButton("Close", null)
         .setNeutralButton("Gallery", (d, w) -> gallery.launch(new String[] {"image/*"}))

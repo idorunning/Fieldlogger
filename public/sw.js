@@ -1,5 +1,5 @@
 /* App shell and original photos are separate: API responses are never cached. */
-const CACHE = "fieldnotes-shell-v7";
+const CACHE = "fieldnotes-shell-v8";
 const SHELL = [
   "/",
   "/privacy",
@@ -12,6 +12,7 @@ const SHELL = [
   "/field-robin.jpg",
   "/field-fox.jpg",
   "/fonts/dm-sans-latin.woff2",
+  "/fonts/kalam-bold.ttf",
 ];
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -76,11 +77,11 @@ self.addEventListener("fetch", (event) => {
       const cached = await caches.match(shellPath);
       if (cached) return cached;
       try { return await refresh; }
-      catch { return new Response("Open Field Logger online once to save it for offline use.", {headers: {"Content-Type": "text/plain"}}); }
+      catch { return new Response("Open My Trail Log online once to save it for offline use.", {headers: {"Content-Type": "text/plain"}}); }
     })());
     return;
   }
-  if (/\.(js|css|woff2?|png|jpg|svg)$/.test(url.pathname))
+  if (/\.(js|css|woff2?|ttf|png|jpg|svg)$/.test(url.pathname))
     event.respondWith(
       (async () => {
         const cached = await caches.match(request);

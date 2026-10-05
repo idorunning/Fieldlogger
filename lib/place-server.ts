@@ -21,7 +21,7 @@ export async function reversePlace(request: Request) {
   const upstream = new URL("https://photon.komoot.io/reverse");
   upstream.search = new URLSearchParams({ lat: lat.toFixed(4), lon: lon.toFixed(4), lang: "en", radius: "1" }).toString();
   try {
-    const response = await fetch(upstream, { headers: { "User-Agent": "FieldLogger/1.0 (+https://fieldlogger.co.uk)", Accept: "application/json" }, signal: AbortSignal.timeout(6000) });
+    const response = await fetch(upstream, { headers: { "User-Agent": "MyTrailLog/2.0.1 (+https://fieldlogger.co.uk)", Accept: "application/json" }, signal: AbortSignal.timeout(6000) });
     if (!response.ok) return json({ error: "Place lookup is temporarily unavailable" }, 503);
     const place = photonPlace(await response.json());
     await bucket.put(key, JSON.stringify({ place, expires: now + (place ? 30 * 86400000 : 3600000) }), { httpMetadata: { contentType: "application/json" } });

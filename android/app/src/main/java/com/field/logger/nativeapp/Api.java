@@ -51,7 +51,7 @@ public final class Api {
             .url(ORIGIN + path)
             .header("Accept", "application/json")
             .header("Origin", ORIGIN)
-            .header("User-Agent", "FieldLogger-Android/2.0.0");
+            .header("User-Agent", "MyTrailLog-Android/2.0.1");
     if (cookie != null && !cookie.isEmpty()) request.header("Cookie", cookie);
     byte[] payload = body;
     if (payload == null

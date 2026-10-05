@@ -200,7 +200,7 @@ public final class Repository {
   public int importBackup(byte[] bytes, String owner) throws Exception {
     JSONObject backup = new JSONObject(new String(bytes, java.nio.charset.StandardCharsets.UTF_8));
     if (!"fieldnotes-backup-v1".equals(backup.optString("format")))
-      throw new IOException("Choose a Field Logger journal export.");
+      throw new IOException("Choose a My Trail Log journal export.");
     JSONArray rows = backup.getJSONArray("observations");
     int count = 0;
     for (int i = 0; i < rows.length(); i++) {

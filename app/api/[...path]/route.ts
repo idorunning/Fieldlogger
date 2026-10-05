@@ -171,7 +171,7 @@ async function handle(request: Request) {
     if (!user) return json({ error: "Sign in to sync your journal." }, 401);
     if (path[0] === "account" && request.method === "DELETE") {
       if (request.headers.get("origin") !== new URL(request.url).origin)
-        return json({ error: "Open your account in Field Logger to delete it." }, 403);
+        return json({ error: "Open your account in My Trail Log to delete it." }, 403);
       const input = z.object({ password: z.string().min(8).max(256) }).parse(await request.json());
       const account = await database().prepare("SELECT password_hash,salt FROM users WHERE id=?").bind(user.id).first<{password_hash: string; salt: string}>();
       if (!account || !constantTimeEqual(await hashPassword(input.password, account.salt), account.password_hash))

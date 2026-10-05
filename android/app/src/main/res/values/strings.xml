@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Field Logger</string>
+    <string name="app_name">My Trail Log</string>
     <string name="camera_shortcut">Camera</string>
     <string name="journal_shortcut">My journal</string>
     <string name="asset_statements" translatable="false">[{\"relation\":[\"delegate_permission/common.handle_all_urls\"],\"target\":{\"namespace\":\"web\",\"site\":\"https://fieldlogger.co.uk\"}}]</string>

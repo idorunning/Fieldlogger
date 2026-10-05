@@ -2,22 +2,23 @@ import type { Metadata, Viewport } from "next";
 import { phoneLayoutScript } from "../lib/phone-layout";
 import "./globals.css";
 import "./photo-ui.css";
+import "./trail-brand.css";
 export const metadata: Metadata = {
-  title: "Field Logger · A world worth noticing",
+  title: "My Trail Log · Your nature photo journal",
   description:
     "Your personal countryside discovery journal. Photograph, discover and remember the interesting things along the way.",
   manifest: "/manifest.webmanifest",
   icons: { icon: "/favicon.svg", apple: "/icon-192.png" },
   appleWebApp: {
     capable: true,
-    title: "Field Logger",
+    title: "My Trail Log",
     statusBarStyle: "default",
   },
 };
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#173f35",
+  themeColor: "#154e45",
   viewportFit: "cover",
 };
 export default function Layout({ children }: { children: React.ReactNode }) {

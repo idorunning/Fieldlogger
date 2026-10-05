@@ -514,7 +514,7 @@ function Detail({
         canvas.width = 1080;
         canvas.height = 1430;
         const ctx = canvas.getContext("2d")!;
-        ctx.fillStyle = "#f6f7f2";
+        ctx.fillStyle = "#fffdf7";
         ctx.fillRect(0, 0, 1080, 1430);
         const scale = Math.max(1080 / bitmap.width, 810 / bitmap.height);
         ctx.drawImage(
@@ -525,9 +525,9 @@ function Detail({
           bitmap.height * scale,
         );
         bitmap.close();
-        ctx.fillStyle = "#173f35";
+        ctx.fillStyle = "#154e45";
         ctx.font = "bold 24px sans-serif";
-        ctx.fillText("FIELD LOGGER  /  A LITTLE DISCOVERY", 60, 874);
+        ctx.fillText("MY TRAIL LOG  /  A LITTLE DISCOVERY", 60, 874);
         ctx.font = "42px Georgia";
         wrap(ctx, record.name || "A little mystery", 60, 938, 960, 50, 2);
         ctx.font = "italic 26px Georgia";
@@ -556,8 +556,8 @@ function Detail({
         ctx.fillStyle = "#667168";
         ctx.fillText(
           identification
-            ? "AI identification suggestion · Field Logger"
-            : "My countryside field journal · Field Logger",
+            ? "AI identification suggestion · My Trail Log"
+            : "My countryside field journal · My Trail Log",
           60,
           1375,
         );
@@ -1283,7 +1283,7 @@ export default function Fieldnotes() {
             <Leaf size={25} />
           </span>
           <span>
-            Field Logger<small>A WORLD WORTH NOTICING</small>
+            My Trail Log<small>A WORLD WORTH NOTICING</small>
           </span>
         </a>
         <p className="nav-label">YOUR EXPLORATIONS</p>
@@ -1341,7 +1341,7 @@ export default function Fieldnotes() {
         <header className="topbar">
           <button onClick={() => setView("discover")} className="mobile-brand" aria-label="Journal home">
             <Leaf size={22} />
-            Field Logger
+            My Trail Log
           </button>
           <div className="breadcrumb">
             My little corner of the world <span>/</span>{" "}
@@ -1409,7 +1409,7 @@ export default function Fieldnotes() {
                       day: "numeric",
                       month: "long",
                     })
-                  : "FIELD LOGGER / YOUR EXPLORATIONS"}
+                  : "MY TRAIL LOG / YOUR EXPLORATIONS"}
               </p>
               <h1>{title}</h1>
               <p className="muted">{subtitle}</p>
@@ -1962,7 +1962,7 @@ export default function Fieldnotes() {
                   <h2>A companion to your curiosity</h2>
                   <p>
                     A photograph can suggest an identity. Reference sources help
-                    explain it. Your own observations help settle it. Field Logger
+                    explain it. Your own observations help settle it. My Trail Log
                     keeps all three visible.
                   </p>
                 </div>
@@ -2012,7 +2012,7 @@ export default function Fieldnotes() {
                 {
                   name: "iNaturalist",
                   role: "Community and biodiversity reference",
-                  text: "Useful for comparing community observations. Its full classification model remains private; the public API and open-source server are not a free unlimited identification service. Field Logger does not publish your observations there.",
+                  text: "Useful for comparing community observations. Its full classification model remains private; the public API and open-source server are not a free unlimited identification service. My Trail Log does not publish your observations there.",
                   url: "https://github.com/inaturalist/inatVisionAPI",
                   state: "Research reference",
                 },

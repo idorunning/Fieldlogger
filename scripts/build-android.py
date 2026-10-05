@@ -11,6 +11,6 @@ version=metadata['elements'][0]['versionName']
 if metadata['applicationId']!='com.field.logger' or not re.fullmatch(r'[A-Za-z0-9._-]+',version):
  raise SystemExit('Unexpected Android release metadata; refusing to label the artifacts.')
 output=root.parent/'artifacts';output.mkdir(exist_ok=True)
-for src,dst in [('bundle/release/app-release.aab',f'fieldlogger-{version}-play.aab'),('apk/release/app-release.apk',f'fieldlogger-{version}-release.apk')]:
+for src,dst in [('bundle/release/app-release.aab',f'my-trail-log-{version}-play.aab'),('apk/release/app-release.apk',f'my-trail-log-{version}-release.apk')]:
  shutil.copy2(root/'android/app/build/outputs'/src,output/dst)
  print('Built '+str(output/dst))

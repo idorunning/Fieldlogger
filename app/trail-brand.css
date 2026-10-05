@@ -1,0 +1,65 @@
+@font-face {
+  font-family: "Trail Hand";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/kalam-bold.ttf") format("truetype");
+}
+
+:root {
+  --green: #154e45;
+  --ink: #203d36;
+  --green-light: #e3efdf;
+  --lime: #f0dc7a;
+  --paper: #fffdf7;
+  --muted: #596c62;
+  --line: #dee6df;
+}
+
+.brand, .mobile-brand {
+  font-family: "Trail Hand", "DM Sans", sans-serif;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.35;
+}
+.brand { gap: 8px; font-size: 29px; }
+.brand-mark { width: 28px; min-width: 28px; color: #f0dc7a; }
+.brand small { font-family: "DM Sans", sans-serif; color: #e0edda; letter-spacing: 1px; line-height: 1.6; }
+.sidebar { background: #154e45; }
+.nav-label { color: #c3dbc9; }
+.nav-item { color: #e3efdf; border-radius: 12px; }
+.nav-item.active { background: #f0dc7a; color: #21453b; font-weight: 650; }
+.nav-item.active > span { background: #21453b15; }
+.sidebar .capture-button { background: #f0dc7a; border-radius: 14px; }
+.topbar { background: #fffdf7; }
+.breadcrumb, .sync-status { color: #536b60; }
+.avatar { background: #f6dfcf; border-color: #e5bfa9; }
+.button.primary { background: #154e45; }
+.overview-stats { border-radius: 20px; box-shadow: 0 4px 20px #154e4507; }
+.stat-icon { background: #d9edce; color: #386a35; }
+.stat-icon.ochre { background: #fff0b5; color: #8b640b; }
+.stat-icon.blue { background: #d8eef2; color: #286575; }
+.stat-icon.lavender { background: #eae2f6; color: #73539c; }
+.chip { background: #fff; border-color: #d4ded5; border-radius: 12px; }
+.chip.active { background: #f6e8a4; border-color: #d2bb56; color: #35462e; }
+.search-box { background: #fff; border-radius: 14px; }
+.filter-toggle.selected { background: #d8eef2; color: #245e68; }
+.discovery-card { box-shadow: 0 4px 22px #154e4509; }
+.category-stats button:nth-child(3n + 1) { background: #edf4e7; }
+.category-stats button:nth-child(3n + 2) { background: #fff3d9; }
+.category-stats button:nth-child(3n) { background: #eaf3f6; }
+.journal-home { background: #154e45; }
+.discover-shade { background: linear-gradient(#092f278c, #12382c30 45%, #092f278c); }
+.journal-photo { border-color: #ffffff60; box-shadow: 0 6px 24px #082d2526; }
+.journal-home-tools button { background: #fffdf7; color: #154e45; border-color: #fffdf7; }
+.journal-home-empty { background: #113d32bf; border-color: #e2edbb70; }
+.journal-home-empty > svg { color: #f0dc7a; }
+.legal-page > a:first-child { font-weight: 600; text-decoration-color: #df8065; text-underline-offset: 5px; }
+.legal-page h2 { color: #154e45; }
+
+@media (max-width: 800px), (pointer: coarse) and (hover: none) {
+  .topbar .mobile-brand, .view-discover .mobile-brand { font-size: 1.65rem; }
+  .mobile-brand svg { width: 19px; height: 19px; }
+  .mobile-nav { background: #fffdf7; }
+  .mobile-capture > span { background: #154e45; color: #f0dc7a; }
+}

@@ -1,4 +1,4 @@
-# Field Logger
+# My Trail Log
 
 A mobile-first personal countryside discovery journal: photograph something, save the moment and place, then explore what it might be. The product rewards variety and curiosity, not distance or walking totals.
 
@@ -26,7 +26,7 @@ Account keys are encrypted with AES-256-GCM before storage. The encryption key i
 
 The source repository is [idorunning/Fieldlogger](https://github.com/idorunning/Fieldlogger), on `main`. Make changes in this repository. Sites still requires a matching source push to its deployment mirror and a build archive; pushing GitHub alone does not publish the website. Keep `.openai/hosting.json` and the existing database and image storage.
 
-`fieldlogger.co.uk` is attached to the existing deployment, and its DNS and HTTPS certificate have been verified active. See [docs/DOMAIN-SETUP.md](docs/DOMAIN-SETUP.md) for the retained records. The user approved Field Logger password login as the sole app entry point for Android. Journal data and encrypted account keys remain private to each account.
+`fieldlogger.co.uk` is attached to the existing deployment, and its DNS and HTTPS certificate have been verified active. See [docs/DOMAIN-SETUP.md](docs/DOMAIN-SETUP.md) for the retained records. The user approved My Trail Log password login as the sole app entry point for Android. Journal data and encrypted account keys remain private to each account.
 
 ## Run locally
 
@@ -62,7 +62,7 @@ The browser acceptance test uses Playwright and `/usr/bin/chromium`, a disposabl
 
 Server secrets belong in ignored local environment files through approved secure setup, and in hosting secret configuration for deployment. No provider key belongs in browser JavaScript. Optional variable names are documented in `.env.example`; it contains no secrets.
 
-The existing Site is `appgprj_6ac2d981043081919ee03d9ff57bf87e`; reuse `.openai/hosting.json`. Do not register a replacement. The website is publicly reachable, with account-scoped Field Logger login protecting journal data and saved keys. Logical storage bindings are `DB` and `BUCKET`. Production build emits `dist/server/index.js`, `dist/client`, and `dist/.openai` for hosting metadata, and `dist/drizzle` for migrations. The deployment archive puts the latter two at `.openai/` and `drizzle/` at its root.
+The existing Site is `appgprj_6ac2d981043081919ee03d9ff57bf87e`; reuse `.openai/hosting.json`. Do not register a replacement. The website is publicly reachable, with account-scoped My Trail Log login protecting journal data and saved keys. Logical storage bindings are `DB` and `BUCKET`. Production build emits `dist/server/index.js`, `dist/client`, and `dist/.openai` for hosting metadata, and `dist/drizzle` for migrations. The deployment archive puts the latter two at `.openai/` and `drizzle/` at its root.
 
 The Sites skill's local helper scripts were not installed in this environment. SEBP source was retrieved over its authenticated source repository and used as a retained build scaffold. Publication uses an exact-source push and validated build archive followed by native Sites deployment. Registration alone is not a live URL; check the native deployment result for the published status.
 
@@ -72,8 +72,8 @@ The web app must load online once before it can reopen offline. The native Andro
 
 ## Next gate
 
-Test the signed Android release on the user's phone, including camera/GPS and offline reopening. The deployed provider, image storage, and identification pipeline have passed live checks. Android version 2.0.0 implements native screens, camera, storage and background uploads; see `docs/ANDROID.md`. The Android project now targets `com.field.logger`; see [docs/ANDROID.md](docs/ANDROID.md) for release signing, rebuild and Play Console instructions.
+Test the signed Android release on the user's phone, including camera/GPS and offline reopening. The deployed provider, image storage, and identification pipeline have passed live checks. Android version 2.0.1 implements native screens, camera, storage and background uploads; see `docs/ANDROID.md`. The Android project now targets `com.field.logger`; see [docs/ANDROID.md](docs/ANDROID.md) for release signing, rebuild and Play Console instructions.
 
 ## Native Android app
 
-The Android source in `android/` now builds Field Logger 2.0.0 as a native app. It uses CameraX, app-private SQLite/photo storage and WorkManager rather than launching Chrome. It connects to the existing account and identification APIs; the web application remains separately implemented. See [native release and migration instructions](docs/ANDROID.md).
+The Android source in `android/` now builds My Trail Log 2.0.1 as a native app. It uses CameraX, app-private SQLite/photo storage and WorkManager rather than launching Chrome. It connects to the existing account and identification APIs; the web application remains separately implemented. See [native release and migration instructions](docs/ANDROID.md).
