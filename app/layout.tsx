@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import "./photo-ui.css";
 export const metadata: Metadata = {
   title: "Field Logger · A world worth noticing",
   description:

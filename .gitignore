@@ -14,3 +14,8 @@ android/local.properties
 
 __pycache__/
 *.pyc
+
+android/build/
+android/signing.properties
+*.p12
+*.pfx

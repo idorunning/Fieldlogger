@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+const base=process.env.TEST_ORIGIN||'http://localhost:8787';
+async function account(){const email=`delete-qa-${crypto.randomUUID()}@example.test`,password='Delete-QA-2026-Only!';const r=await fetch(base+'/api/auth/register',{method:'POST',headers:{'Content-Type':'application/json',Origin:base},body:JSON.stringify({email,password,name:'Delete QA'})});assert.equal(r.status,200);const data=await r.json();return {email,password,id:data.user.id,cookie:r.headers.get('set-cookie').split(';')[0]};}
+const first=await account(),second=await account();
+const id=crypto.randomUUID();
+const form=new FormData();form.set('metadata',JSON.stringify({id,capturedAt:new Date().toISOString(),localDate:'2026-10-05',localHour:10,timezone:'Europe/London',latitude:null,longitude:null,accuracy:null,locationSource:'none',place:'QA',note:'Delete fixture',category:'birds',name:'Test robin',scientificName:'',confirmed:false,identification:null,analysisState:'pending',updatedAt:new Date().toISOString(),revision:1}));form.set('photo',new Blob([await fs.readFile('public/field-robin.jpg')],{type:'image/jpeg'}),'robin.jpg');
+assert.equal((await fetch(base+'/api/observations/'+id,{method:'PUT',headers:{Cookie:first.cookie,Origin:base},body:form})).status,200);
+const headers={Cookie:first.cookie,Origin:base,'Content-Type':'application/json'};
+assert.equal((await fetch(base+'/api/settings/openai-key',{method:'PUT',headers,body:JSON.stringify({apiKey:'sk-test-only-not-a-real-api-key-444444444444'})})).status,200);
+const remove=(password,override={})=>fetch(base+'/api/account',{method:'DELETE',headers:{...headers,...override},body:JSON.stringify({password})});
+assert.equal((await remove(first.password,{Origin:'https://other.example'})).status,403);
+assert.equal((await remove('wrong-password')).status,401);
+assert.equal((await fetch(base+'/api/observations/'+id+'/photo',{headers:{Cookie:first.cookie}})).status,200);
+assert.equal((await remove(first.password)).status,200);
+assert.equal((await fetch(base+'/api/observations',{headers:{Cookie:first.cookie}})).status,401);
+assert.equal((await fetch(base+'/api/auth/me',{headers:{Cookie:first.cookie}})).status,200);
+assert.equal((await fetch(base+'/api/auth/me',{headers:{Cookie:first.cookie}}).then(r=>r.json())).user,null);
+const login=await fetch(base+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json',Origin:base},body:JSON.stringify({email:first.email,password:first.password})});assert.equal(login.status,401);
+assert.equal((await fetch(base+'/api/observations',{headers:{Cookie:second.cookie}})).status,200);
+const registeredAgain=await fetch(base+'/api/auth/register',{method:'POST',headers:{'Content-Type':'application/json',Origin:base},body:JSON.stringify({email:first.email,password:first.password,name:'New account'})});assert.equal(registeredAgain.status,200);const newCookie=registeredAgain.headers.get('set-cookie').split(';')[0];
+assert.equal((await fetch(base+'/api/observations/'+id+'/photo',{headers:{Cookie:newCookie}})).status,404);
+assert.equal((await fetch(base+'/api/settings/openai-key',{headers:{Cookie:newCookie}}).then(r=>r.json())).hasKey,false);
+console.log('PASS: origin/password protection, session revocation, account and journal deletion, key removal and owner isolation');
+console.log(JSON.stringify({deletedOwner:first.id,deletedObservation:id}));

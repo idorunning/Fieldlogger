@@ -146,3 +146,12 @@ export async function syncRecords(owner: string, notify: () => void) {
   }
   notify();
 }
+
+export async function clearLocalAccount(owner: string) {
+  const database = await db();
+  const tx = database.transaction(["observations", "meta"], "readwrite");
+  const keys = await tx.objectStore("observations").index("owner").getAllKeys(owner);
+  for (const key of keys) await tx.objectStore("observations").delete(key);
+  await tx.objectStore("meta").delete("activeUser");
+  await tx.done;
+}

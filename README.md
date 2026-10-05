@@ -26,7 +26,7 @@ Account keys are encrypted with AES-256-GCM before storage. The encryption key i
 
 The source repository is [idorunning/Fieldlogger](https://github.com/idorunning/Fieldlogger), on `main`. Make changes in this repository. Sites still requires a matching source push to its deployment mirror and a build archive; pushing GitHub alone does not publish the website. Keep `.openai/hosting.json` and the existing database and image storage.
 
-`fieldlogger.co.uk` is attached to the existing deployment, but it needs the Cloudflare DNS records in [docs/DOMAIN-SETUP.md](docs/DOMAIN-SETUP.md) before HTTPS can work. The deployment is owner-private and requires the owner's ChatGPT access before the journal's own password login.
+`fieldlogger.co.uk` is attached to the existing deployment, and its DNS and HTTPS certificate have been verified active. See [docs/DOMAIN-SETUP.md](docs/DOMAIN-SETUP.md) for the retained records. The user approved Field Logger password login as the sole app entry point for Android. Journal data and encrypted account keys remain private to each account.
 
 ## Run locally
 
@@ -72,4 +72,4 @@ The app must load online once before it can reopen offline. IndexedDB contains r
 
 ## Next gate
 
-Finish Cloudflare DNS and HTTPS validation for `fieldlogger.co.uk`, then test camera/GPS on the user's phone. The deployed provider, image storage, and identification pipeline have passed live checks. The Android bundle is the next phase after that working web version; see `docs/ANDROID.md`. No `.aab` or installable `.apk` has been generated yet.
+Test the signed Android release on the user's phone, including camera/GPS and offline reopening. The deployed provider, image storage, and identification pipeline have passed live checks. Android release packaging now wraps that working web version; see `docs/ANDROID.md`. The Android project now targets `com.field.logger`; see [docs/ANDROID.md](docs/ANDROID.md) for release signing, rebuild and Play Console instructions.

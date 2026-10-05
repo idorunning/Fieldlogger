@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.field.logger",
+      "sha256_cert_fingerprints": [
+        "55:3E:82:65:C4:A8:86:04:36:13:DE:23:71:C5:C9:7A:C4:D8:F1:F4:8A:82:28:73:A1:52:BA:0B:08:F5:E7:9A"
+      ]
+    }
+  }
+]

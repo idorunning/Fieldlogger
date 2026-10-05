@@ -1,12 +1,17 @@
 /* App shell and original photos are separate: API responses are never cached. */
-const CACHE = "fieldnotes-shell-v3";
+const CACHE = "fieldnotes-shell-v4";
 const SHELL = [
   "/",
+  "/privacy",
+  "/delete-account",
   "/favicon.svg",
   "/icon-192.png",
   "/icon-512.png",
   "/manifest.webmanifest",
   "/woodland.jpg",
+  "/field-robin.jpg",
+  "/field-fox.jpg",
+  "/fonts/dm-sans-latin.woff2",
 ];
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -45,30 +50,23 @@ self.addEventListener("fetch", (event) => {
   )
     return;
   if (request.mode === "navigate") {
-    event.respondWith(
-      (async () => {
-        try {
-          const response = await fetch(request);
-          if (
-            response.ok &&
-            !response.redirected &&
-            new URL(response.url).origin === self.location.origin
-          ) {
-            const cache = await caches.open(CACHE);
-            await cache.put("/", response.clone());
-          }
-          return response;
-        } catch {
-          return (
-            (await caches.match("/")) ||
-            new Response(
-              "Open Field Logger online once to save it for offline use.",
-              { headers: { "Content-Type": "text/plain" } },
-            )
-          );
-        }
-      })(),
-    );
+    const shellPath = ["/privacy", "/delete-account"].includes(url.pathname) ? url.pathname : "/";
+    // Return the saved shell immediately; refresh it without delaying launch.
+    const refresh = (async () => {
+      const response = await fetch(request);
+      if (response.ok && !response.redirected && new URL(response.url).origin === self.location.origin) {
+        const cache = await caches.open(CACHE);
+        await cache.put(shellPath, response.clone());
+      }
+      return response;
+    })();
+    event.waitUntil(refresh.then(() => undefined).catch(() => undefined));
+    event.respondWith((async () => {
+      const cached = await caches.match(shellPath);
+      if (cached) return cached;
+      try { return await refresh; }
+      catch { return new Response("Open Field Logger online once to save it for offline use.", {headers: {"Content-Type": "text/plain"}}); }
+    })());
     return;
   }
   if (/\.(js|css|woff2?|png|jpg|svg)$/.test(url.pathname))

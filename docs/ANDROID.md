@@ -1,19 +1,32 @@
-# Android phase
+# Field Logger Android release
 
-The user requested a working web app before an Android bundle. This phase remains pending the first live identification and phone verification. There is no Android binary yet.
+Package: **com.field.logger**. Version: **1.0.0**, version code **1**. Minimum Android: 6 (API 23). Target and compile SDK: Android 16 (API 36).
 
-The web app already includes a Web App Manifest, 192/512 px icons, a service worker, a camera input, geolocation, native Web Share when available and a mobile navigation layout. It can be installed from Chrome after being hosted on HTTPS.
+The Android app uses Google's Android Browser Helper 2.7.3 to open `https://fieldlogger.co.uk` as a Trusted Web Activity. This retains Chrome's camera/gallery intents, sharing, private account cookies, offline app shell and IndexedDB journal. The website must load online once before offline use. Reopening returns the saved shell immediately while refreshing it in the background; API responses and photos remain account-scoped. Uploads resume when the app is foregrounded and connected; Android/browser background scheduling is not guaranteed.
 
-For a private single-user Android installation, provide a signed APK alongside the AAB: an AAB is a publishing bundle and cannot be installed directly by tapping it. Do not submit to the Play Store unless asked.
+The phone interface opens on a full-screen woodland photograph with a large camera action and gallery button. Journal cards are large photographs; capture offers direct save and optional metadata; identification detail keeps the photo above expandable background information. Bottom navigation and capture controls support touch. Real source photos and credits are documented in `PHOTO-CREDITS.json` and `woodland-source.json`.
 
-After the web app passes a real-device check:
+## Build again
 
-1. Keep the existing backend, data model and same-origin session cookies.
-2. Wrap the HTTPS app as a Trusted Web Activity to retain Chrome's offline storage and camera/share behaviour; test the private Sites sign-in boundary carefully. If that boundary prevents a reliable standalone experience, keep the verified PWA and resolve a suitable app-owned HTTPS host before packaging.
-3. Generate the Android project with a stable application ID (proposed `uk.co.fieldlogger.app`), Android camera/location permissions only when needed, adaptive icons and deep-link handling.
-4. Use a persistent user-approved signing key. Never commit or embed signing passwords, provider keys, cookies or session tokens.
-5. Host the generated Digital Asset Links file for the actual package and certificate fingerprint; verify the relationship on device.
-6. Test camera permission denial, gallery EXIF, inaccurate/missing GPS, airplane-mode cold starts, app termination/relaunch, duplicate upload prevention, expired login and share-sheet behaviour.
-7. Build a release AAB and a signed APK for direct installation; document the signing-key backup and app version.
+Install Java 17 or 21 with a compiler, Android platform 36 and build tools. Set `ANDROID_HOME` to the SDK. Gradle 8.13 is pinned by the wrapper with its official SHA-256 checksum. AGP 8.13.2 may install its required build-tool version after licence acceptance.
 
-Do not claim native background upload guarantees until tested on a real Android device. Chrome Background Sync and TWA scheduling can defer work; explicit retry on foreground is the reliable baseline.
+Supply these variables through a private environment or secure CI secret configuration:
+
+- `FIELDLOGGER_KEYSTORE`: absolute path to the persistent PKCS12 key file.
+- `FIELDLOGGER_STORE_PASSWORD`: keystore password.
+- `FIELDLOGGER_KEY_PASSWORD`: private-key password (same password for the delivered PKCS12 backup).
+
+Run `python scripts/build-android.py`. Signing alias: `fieldlogger`. Increment `versionCode` and `versionName` for subsequent Play uploads. Never put signing credentials in source, command arguments, the app or the website. The release build refuses to proceed if signing variables are missing.
+
+## Signing and backups
+
+The release key is generated once and reused. Its public SHA-256 certificate fingerprint is in `public/.well-known/assetlinks.json`. The private signing backup is delivered separately and is excluded from the public repository and web archive. Download and keep that backup privately; it is needed for future releases. The AAB is signed for upload, and the APK is signed for direct installation. An AAB cannot be installed by tapping it.
+
+## Google Play
+
+1. Create the Play Console application and upload `fieldlogger-1.0.0-play.aab` to internal testing first.
+2. Enrol in Play App Signing. If Play generates an app-signing key, copy the **app-signing certificate** SHA-256 from Play Console's App integrity page and add it to the website's existing `sha256_cert_fingerprints`. Keep the delivered APK/upload certificate too. Otherwise the Play-installed app will show browser controls rather than the full-screen interface. A public certificate fingerprint can be shared for this step; never share a private key or password.
+3. Set the privacy-policy URL to `https://fieldlogger.co.uk/privacy`, and account-deletion URL to `https://fieldlogger.co.uk/delete-account`. Complete Data safety and content rating accurately: account details, photos and optional saved location; OpenAI receives photos and approximate location only after key setup. See `PLAY-RELEASE.md`.
+4. Test camera and location permission denial, offline reopen, gallery import, reconnect upload and sharing on an actual phone before requesting production review.
+
+This work produces release files; it does not submit to Google Play. Google Play review and account-specific testing requirements remain separate. Native fullscreen presentation, physical camera/GPS, and background scheduling need device confirmation.

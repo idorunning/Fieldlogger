@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "Field Logger — Discovery journal",
+  "name": "Field Logger",
   "short_name": "Field Logger",
-  "description": "A world worth noticing. Your personal countryside discovery journal.",
+  "description": "Photograph, identify and remember the small wonders outdoors.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -21,6 +21,30 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Take a photo",
+      "short_name": "Camera",
+      "url": "/?action=capture",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "My journal",
+      "short_name": "Journal",
+      "url": "/?view=journal",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }

@@ -1,0 +1,4 @@
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:shortcutId="capture" android:enabled="true" android:icon="@drawable/ic_foreground" android:shortcutShortLabel="@string/camera_shortcut"><intent android:action="android.intent.action.VIEW" android:targetPackage="com.field.logger" android:targetClass="com.field.logger.LauncherActivity" android:data="https://fieldlogger.co.uk/?view=discover"/></shortcut>
+    <shortcut android:shortcutId="journal" android:enabled="true" android:icon="@drawable/ic_foreground" android:shortcutShortLabel="@string/journal_shortcut"><intent android:action="android.intent.action.VIEW" android:targetPackage="com.field.logger" android:targetClass="com.field.logger.LauncherActivity" android:data="https://fieldlogger.co.uk/?view=journal"/></shortcut>
+</shortcuts>

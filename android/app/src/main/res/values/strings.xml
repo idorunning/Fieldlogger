@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">Field Logger</string>
+    <string name="camera_shortcut">New discovery</string>
+    <string name="journal_shortcut">My journal</string>
+    <string name="asset_statements">[{"relation":["delegate_permission/common.handle_all_urls"],"target":{"namespace":"web","site":"https://fieldlogger.co.uk"}}]</string>
+</resources>

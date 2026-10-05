@@ -167,6 +167,28 @@ async function handle(request: Request) {
     }
     const user = await getUser(request);
     if (!user) return json({ error: "Sign in to sync your journal." }, 401);
+    if (path[0] === "account" && request.method === "DELETE") {
+      if (request.headers.get("origin") !== new URL(request.url).origin)
+        return json({ error: "Open your account in Field Logger to delete it." }, 403);
+      const input = z.object({ password: z.string().min(8).max(256) }).parse(await request.json());
+      const account = await database().prepare("SELECT password_hash,salt FROM users WHERE id=?").bind(user.id).first<{password_hash: string; salt: string}>();
+      if (!account || !constantTimeEqual(await hashPassword(input.password, account.salt), account.password_hash))
+        return json({error: "That password did not match. Your account has not been deleted."}, 401);
+      // Revoke sessions first so queued uploads cannot restart during deletion.
+      await database().prepare("DELETE FROM sessions WHERE user_id=?").bind(user.id).run();
+      let cursor: string | undefined;
+      do {
+        const page = await bindings().BUCKET.list({prefix: user.id + "/", cursor});
+        if (page.objects.length) await bindings().BUCKET.delete(page.objects.map(object => object.key));
+        cursor = page.truncated ? page.cursor : undefined;
+      } while (cursor);
+      await database().batch([
+        database().prepare("DELETE FROM observations WHERE user_id=?").bind(user.id),
+        database().prepare("DELETE FROM account_keys WHERE user_id=?").bind(user.id),
+        database().prepare("DELETE FROM users WHERE id=?").bind(user.id),
+      ]);
+      return json({ok:true}, 200, {"Set-Cookie":cookie(request, "", 0)});
+    }
     if (path[0] === "settings" && path[1] === "openai-key") {
       if (
         request.method !== "GET" &&

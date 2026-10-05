@@ -24,3 +24,12 @@ Not yet verified: Pl@ntNet/BioCLIP inference, physical Android camera/GPS/Backgr
 - Mobile browser passed: sign-in gate, masked entry, field clearing, persisted status after reload, replacement, expired-key message, confirmed removal, offline lockout, no key in IndexedDB/localStorage/sessionStorage, no overflow or uncaught browser errors.
 - Full prior photo/offline browser suite and server integration rerun and passed after this change.
 - All key tests used deliberate non-provider fixtures. The expired-key UI response was simulated; backend status mapping was unit-tested. Those key-settings regression tests do not call OpenAI. Separate live connection and photo tests subsequently passed as recorded above.
+
+## Android and phone redesign
+
+- Signed Android AAB and APK compiled successfully for com.field.logger, version 1.0.0 (1), target SDK 36/minimum 23. Release lint passed. Bundletool accepted the AAB structure; JAR signature and APK v1/v2 signatures verified; certificate matches Digital Asset Links. No native .so libraries are included.
+- Phone design checks passed at 360×800, 390×844 and 430×932: camera visible without scrolling, controls at least 48 px high, direct save without optional metadata, large journal/detail photos, real image loading, no horizontal overflow at 200% text size and no browser errors.
+- Full offline capture/reload, GPS, account adoption, reconnect upload, map, correction, stats, milestones, search, dates and photo/story sharing passed after the photo-first redesign.
+- Password-protected account deletion passed origin and password rejection, session revocation, account/key/journal removal and owner isolation. R2 confirmed the deleted test photo key no longer exists.
+- User approved removing the additional ChatGPT site gate; private Field Logger accounts remain required for synced data. The shared temporary testing key is removed from deployment configuration.
+- Android camera, GPS, fullscreen browser handoff and background scheduling have not been exercised on physical hardware. Google Play submission is not part of this build. Play's app-signing certificate must be added to the site's asset links when Play generates a different signing key.

@@ -66,7 +66,8 @@ import { preparePhoto, locate, localDate } from "@/lib/photo";
 import { useAuth } from "./AuthProvider";
 import MapView from "./MapView";
 import ApiKeySettings from "./ApiKeySettings";
-type View = "journal" | "map" | "collection" | "achievements" | "sources";
+import DiscoveryHome from "./DiscoveryHome";
+type View = "discover" | "journal" | "map" | "collection" | "achievements" | "sources";
 const icons = {
   plants: Sprout,
   flowers: Flower2,
@@ -78,6 +79,7 @@ const icons = {
   other: Compass,
 };
 const nav = [
+  { id: "discover" as View, label: "Discover", icon: Compass },
   { id: "journal" as View, label: "Field journal", icon: BookOpen },
   { id: "map" as View, label: "Discovery map", icon: MapIcon },
   { id: "collection" as View, label: "My collection", icon: Leaf },
@@ -324,6 +326,20 @@ function Capture({
         alt="Your new discovery"
         className="capture-photo"
       />
+      <div className="capture-save">        <button
+          className="button primary full"
+          onClick={onSave}
+          disabled={busy || !draft.date}
+        >
+          {busy ? (
+            <LoaderCircle className="spin" size={19} />
+          ) : (
+            <Plus size={19} />
+          )}{" "}
+          {busy ? "Saving…" : "Save discovery"}
+        </button>
+<p><MapPin size={17} />{validCoords(draft.latitude, draft.longitude) ? "Location saved with your photo" : "You can add a location below"}</p></div>
+      <details className="capture-details"><summary>Add details <span>Optional</span><ChevronRight size={21} /></summary>
       <div className="form-stack">
         <label>
           A name, if you know it
@@ -398,23 +414,12 @@ function Capture({
             onChange={(e) => setDraft({ ...draft, note: e.target.value })}
           />
         </label>
-        <button
-          className="button primary full"
-          onClick={onSave}
-          disabled={busy || !draft.date}
-        >
-          {busy ? (
-            <LoaderCircle className="spin" size={19} />
-          ) : (
-            <Plus size={19} />
-          )}{" "}
-          {busy ? "Saving…" : "Save discovery"}
-        </button>
         <p className="small muted centered">
           Saved on this device first. Uploaded and identified when you’re signed
           in and connected.
         </p>
       </div>
+      </details>
     </Dialog>
   );
 }
@@ -646,6 +651,7 @@ function Detail({
                 </p>
               )}
             </div>
+            <details className="field-details"><summary>More about this discovery <ChevronRight size={22} /></summary>
             <section className="context-note">
               <Sun size={22} />
               <div>
@@ -696,6 +702,7 @@ function Detail({
                 support background reading; they do not verify your photo.
               </p>
             </div>
+            </details>
           </>
         ) : (
           <div className="notice">
@@ -885,7 +892,7 @@ function download(blob: Blob, name: string) {
 export default function Fieldnotes() {
   const { user, loading: authLoading, offlineSession, signOut } = useAuth();
   const owner = user?.id || "guest";
-  const [view, setView] = useState<View>("journal"),
+  const [view, setView] = useState<View>("discover"),
     [records, setRecords] = useState<Observation[]>([]),
     [category, setCategory] = useState<Category | "all">("all"),
     [query, setQuery] = useState(""),
@@ -893,6 +900,7 @@ export default function Fieldnotes() {
     [to, setTo] = useState(""),
     [filters, setFilters] = useState(false),
     [login, setLogin] = useState(false),
+    [accountOpen, setAccountOpen] = useState(false),
     [keySettings, setKeySettings] = useState(false),
     [selected, setSelected] = useState<string | null>(null),
     [draft, setDraft] = useState<Draft | null>(null),
@@ -970,7 +978,15 @@ export default function Fieldnotes() {
   }, [sync, authLoading]);
   useEffect(() => {
     if (window.location.hash === "#api-key") setKeySettings(true);
+    const launchView = new URLSearchParams(window.location.search).get("view");
+    if (["discover", "journal", "map", "collection", "achievements", "sources"].includes(launchView || "")) setView(launchView as View);
   }, []);
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (view === "discover") url.searchParams.delete("view");
+    else url.searchParams.set("view", view);
+    window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+  }, [view]);
   const refreshStatus = useCallback(() => {
     fetch("/api/status", { cache: "no-store" })
       .then(
@@ -1084,7 +1100,7 @@ export default function Fieldnotes() {
     setBusy(true);
     try {
       const result = await preparePhoto(file),
-        gps = source === "camera" ? await gpsRef.current : null,
+        gps = source === "camera" ? await Promise.race([gpsRef.current, new Promise<null>(resolve => setTimeout(() => resolve(null), 1500))]) : null,
         date = result.exifDate || new Date();
       const lat = result.gps?.latitude ?? gps?.coords.latitude ?? null,
         lng = result.gps?.longitude ?? gps?.coords.longitude ?? null;
@@ -1214,6 +1230,7 @@ export default function Fieldnotes() {
   }
   const pending = records.filter((r) => r.syncState !== "synced").length;
   const title = {
+    discover: "Discover",
     journal: "Your field journal",
     map: "Every discovery has a place",
     collection: "A world you’re getting to know",
@@ -1221,6 +1238,7 @@ export default function Fieldnotes() {
     sources: "A little evidence goes a long way",
   }[view];
   const subtitle = {
+    discover: "",
     journal: "Small wonders. Good memories. All yours.",
     map: "Revisit the things that made you stop and look.",
     collection: "The variety of life, seen through your eyes.",
@@ -1228,7 +1246,7 @@ export default function Fieldnotes() {
     sources: "Know where a suggestion comes from, and what it can tell you.",
   }[view];
   return (
-    <div className="app-shell">
+    <div className={"app-shell view-" + view}>
       <aside className="sidebar">
         <a href="/" className="brand">
           <span className="brand-mark">
@@ -1291,10 +1309,10 @@ export default function Fieldnotes() {
       </aside>
       <div className="main-shell">
         <header className="topbar">
-          <a href="/" className="mobile-brand">
+          <button onClick={() => setView("discover")} className="mobile-brand" aria-label="Discover home">
             <Leaf size={22} />
             Field Logger
-          </a>
+          </button>
           <div className="breadcrumb">
             My little corner of the world <span>/</span>{" "}
             {nav.find((x) => x.id === view)?.label || "Field guide"}
@@ -1334,11 +1352,9 @@ export default function Fieldnotes() {
             <button
               className="profile-button"
               onClick={() =>
-                user
-                  ? void signOut().catch((e) => toast(e.message))
-                  : setLogin(true)
+                user ? setAccountOpen(true) : setLogin(true)
               }
-              title={user ? "Sign out" : "Create account or sign in"}
+              title={user ? "Your account" : "Create account or sign in"}
             >
               {user ? (
                 <span className="avatar">
@@ -1348,12 +1364,12 @@ export default function Fieldnotes() {
                 <LogIn size={18} />
               )}
               <span>{user ? user.name.split(" ")[0] : "Sign in"}</span>
-              {user && <LogOut size={15} />}
+
             </button>
           </div>
         </header>
         <main id="main" className="main-content">
-          <div className="page-heading">
+          {view !== "discover" && <div className="page-heading">
             <div>
               <p className="eyebrow">
                 {view === "journal"
@@ -1375,8 +1391,9 @@ export default function Fieldnotes() {
               <Camera size={19} />
               New discovery
             </button>
-          </div>
-          {!online && (
+          </div>}
+          {view === "discover" && <DiscoveryHome records={records} online={online} busy={busy} onCamera={openCamera} onGallery={() => galleryRef.current?.click()} onJournal={() => setView("journal")} onOpen={setSelected} onGuide={() => setView("sources")} />}
+          {!online && view !== "discover" && (
             <div className="offline-banner">
               <WifiOff size={18} />
               <span>
@@ -2034,6 +2051,9 @@ export default function Fieldnotes() {
               </section>
             </div>
           )}
+          {view === "sources" && <>
+              <section className="guide-offline photo-credits"><h2>Photo credits</h2><p>The opening photographs are inspiration, separate from your own journal.</p><p><a href="https://unsplash.com/photos/QF2kkrpmx34" target="_blank" rel="noreferrer">Woodland · Rob Wingate</a></p><p><a href="https://unsplash.com/photos/7ToCy-Li1Q4" target="_blank" rel="noreferrer">Robin · Richard Bell</a></p><p><a href="https://unsplash.com/photos/BNR4sS2LA10" target="_blank" rel="noreferrer">Red fox · Charles Jackson</a></p><p>Photographs used under the <a href="https://unsplash.com/license" target="_blank" rel="noreferrer">Unsplash License</a>.</p></section>
+          </>}
           {view === "journal" && !user && (
             <div className="account-nudge">
               <span className="nudge-icon">
@@ -2054,7 +2074,7 @@ export default function Fieldnotes() {
               </button>
             </div>
           )}
-          <footer className="app-footer">
+          {view !== "discover" && <footer className="app-footer">
             <span>
               <Leaf size={14} /> Made for wandering minds.
             </span>
@@ -2064,7 +2084,7 @@ export default function Fieldnotes() {
             <button onClick={() => setView("sources")}>
               Sources & offline help <CircleHelp size={14} />
             </button>
-          </footer>
+          </footer>}
         </main>
       </div>
       <nav className="mobile-nav" aria-label="Main navigation">
@@ -2123,6 +2143,16 @@ export default function Fieldnotes() {
         className="visually-hidden"
         onChange={(e) => photoChosen(e.target.files?.[0], "gallery")}
       />
+      {accountOpen && user && <Dialog title="Your journal" onClose={() => setAccountOpen(false)}>
+        <h3>{user.name}</h3><p className="muted">{user.email}</p>
+        <div className="account-actions form-stack">
+          <button className="button primary full" onClick={() => { setAccountOpen(false); setKeySettings(true); }}><Sparkles size={22} />Photo identification settings</button>
+          <button className="button secondary full" onClick={backup} disabled={!records.length}><Download size={22} />Export my journal</button>
+          <a className="button secondary full" href="/privacy">Privacy & your data</a>
+          <a className="button secondary full" href="/delete-account">Delete account</a>
+          <button className="button secondary full" onClick={() => void signOut().then(() => setAccountOpen(false)).catch(e => toast(e.message))}><LogOut size={22} />Sign out</button>
+        </div>
+      </Dialog>}
       {login && <Login onClose={() => setLogin(false)} />}{" "}
       {keySettings && !login && (
         <Dialog title="API key settings" onClose={() => setKeySettings(false)}>
