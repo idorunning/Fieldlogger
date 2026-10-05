@@ -1,6 +1,6 @@
 # Field Logger Android release
 
-Package: **com.field.logger**. Version: **1.0.0**, version code **1**. Minimum Android: 6 (API 23). Target and compile SDK: Android 16 (API 36).
+Package: **com.field.logger**. Version: **1.0.1**, version code **2**. Minimum Android: 7 (API 24), meeting Google Play automatic protection's minimum-SDK requirement. Target and compile SDK: Android 16 (API 36).
 
 The Android app uses Google's Android Browser Helper 2.7.3 to open `https://fieldlogger.co.uk` as a Trusted Web Activity. This retains Chrome's camera/gallery intents, sharing, private account cookies, offline app shell and IndexedDB journal. The website must load online once before offline use. Reopening returns the saved shell immediately while refreshing it in the background; API responses and photos remain account-scoped. Uploads resume when the app is foregrounded and connected; Android/browser background scheduling is not guaranteed.
 
@@ -16,7 +16,7 @@ Supply these variables through a private environment or secure CI secret configu
 - `FIELDLOGGER_STORE_PASSWORD`: keystore password.
 - `FIELDLOGGER_KEY_PASSWORD`: private-key password (same password for the delivered PKCS12 backup).
 
-Run `python scripts/build-android.py`. Signing alias: `fieldlogger`. Increment `versionCode` and `versionName` for subsequent Play uploads. Never put signing credentials in source, command arguments, the app or the website. The release build refuses to proceed if signing variables are missing.
+Run `python scripts/build-android.py`. Artifact filenames use the version from the built APK metadata. Signing alias: `fieldlogger`. Increment `versionCode` and `versionName` for subsequent Play uploads. Never put signing credentials in source, command arguments, the app or the website. The release build refuses to proceed if signing variables are missing.
 
 ## Signing and backups
 
@@ -24,7 +24,7 @@ The release key is generated once and reused. Its public SHA-256 certificate fin
 
 ## Google Play
 
-1. Create the Play Console application and upload `fieldlogger-1.0.0-play.aab` to internal testing first.
+1. Upload `fieldlogger-1.0.1-play.aab` (version code 2) to the existing Play Console application for internal testing. This replaces the API 23 bundle with an API 24 minimum SDK.
 2. Enrol in Play App Signing. If Play generates an app-signing key, copy the **app-signing certificate** SHA-256 from Play Console's App integrity page and add it to the website's existing `sha256_cert_fingerprints`. Keep the delivered APK/upload certificate too. Otherwise the Play-installed app will show browser controls rather than the full-screen interface. A public certificate fingerprint can be shared for this step; never share a private key or password.
 3. Set the privacy-policy URL to `https://fieldlogger.co.uk/privacy`, and account-deletion URL to `https://fieldlogger.co.uk/delete-account`. Complete Data safety and content rating accurately: account details, photos and optional saved location; OpenAI receives photos and approximate location only after key setup. See `PLAY-RELEASE.md`.
 4. Test camera and location permission denial, offline reopen, gallery import, reconnect upload and sharing on an actual phone before requesting production review.
