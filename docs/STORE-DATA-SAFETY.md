@@ -1,4 +1,4 @@
-# Data safety worksheet — native My Trail Log 2.0.1
+# Data safety worksheet — native My Trail Log 2.1.0
 
 This is implementation guidance for completing the Play questionnaire, not a submitted or legally certified declaration. It covers the native app and existing Field Logger server. Verify answers against the provider terms used for your account and any later changes.
 
@@ -9,7 +9,7 @@ This is implementation guidance for completing the Play questionnaire, not a sub
 | Precise location | GPS-tagged discovery uploads to private account | App functionality / journal map | Optional permission, no background location; retained with the discovery |
 | Approximate location | Rounded coordinates for automatic place names and optional identification | App functionality | Optional when GPS/identification is used; do not claim provider processing is ephemeral without confirming their retention |
 | Other user-generated content | Notes, names, discovery metadata, capture dates/times and corrections upload with a discovery | App functionality | Optional; retained with the discovery |
-| Authentication secrets | Password supplied for account actions, salted hash retained; user API key encrypted on server | Account management / optional identification | Password and API key are not persisted by the native client; key can be removed in settings |
+| Authentication secrets | Password supplied for account actions, salted hash retained; user API key encrypted on server | Account management / optional identification | Password and API key are not persisted by the native client; existing server service configuration is managed on the desktop website; the native app has no key entry |
 
 Data is linked to the signed-in account when uploaded. Guest photos remain local unless the user signs in or chooses to share/export. Network calls use HTTPS; Android disallows cleartext traffic. The session cookie is encrypted locally using Android Keystore. Device-local private files are not Android cloud-backup enabled.
 
@@ -34,3 +34,5 @@ Photos, coordinates and notes in private Cloudflare storage are retained, so the
 Deletion clears the server account, sessions, saved API key and uploaded discoveries; it also clears that account's local journal where deletion is requested. Exports and copies on other devices must be removed separately. Signing out keeps local files separated by account; it is not deletion.
 
 Official guide: https://support.google.com/googleplay/android-developer/answer/10787469.
+
+Archive retains the complete discovery, including GPS, and is not deletion. Archived photos sync and remain in exports. Branded photo stories include the place by default, with a preview option to hide it, while omitting precise GPS and EXIF.
