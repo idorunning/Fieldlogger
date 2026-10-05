@@ -71,17 +71,17 @@ with sync_playwright() as p:
         else:
             route.continue_()
     context.route(BASE + '/**',serve_previous_cache)
-    page.goto(BASE + '/?app_version=1.0.3',wait_until='domcontentloaded')
+    page.goto(BASE + '/?app_version=1.0.4',wait_until='domcontentloaded')
     page.wait_for_function("window.__registrationFixtureReached && document.body.innerText.length === 0",timeout=15000)
     replay['old_blank_observed'] = True
     print('PASS: cached HTML and JavaScript from the previous release reproduce the blank startup')
     page.wait_for_function("!location.search.includes('app_version') && navigator.serviceWorker.controller !== null",timeout=40000)
     page.wait_for_load_state('networkidle',timeout=40000)
-    expect(page.get_by_role('button',name='Take a photo',exact=True)).to_be_visible(timeout=15000)
+    expect(page.get_by_role('button',name='Camera',exact=True)).to_be_visible(timeout=15000)
     page.get_by_role('button',name='Journal',exact=True).click()
     expect(page.get_by_role('heading',name='Your field journal')).to_be_visible()
     caches = page.evaluate('caches.keys()')
-    assert 'fieldnotes-shell-v6' in caches and 'fieldnotes-shell-v4' not in caches,caches
+    assert 'fieldnotes-shell-v7' in caches and 'fieldnotes-shell-v4' not in caches,caches
     note = page.evaluate('''() => new Promise(resolve => {
       const open = indexedDB.open('fieldnotes-v1',1);
       open.onsuccess = () => {
@@ -91,19 +91,19 @@ with sync_playwright() as p:
       };
     })''')
     assert note == 'Keep this offline note',note
-    page.get_by_role('button',name='Discover home',exact=True).click()
+    page.get_by_role('button',name='Journal home',exact=True).click()
     page.screenshot(path=str(artifacts / 'fieldlogger-startup-repaired.png'),full_page=True)
     context.unroute(BASE + '/**',serve_previous_cache)
     context.set_offline(True)
     page.reload(wait_until='domcontentloaded')
-    expect(page.get_by_role('button',name='Take a photo',exact=True)).to_be_visible(timeout=15000)
+    expect(page.get_by_role('button',name='Camera',exact=True)).to_be_visible(timeout=15000)
     page.get_by_role('button',name='Journal',exact=True).click()
     expect(page.get_by_role('heading',name='Your field journal')).to_be_visible()
     assert not errors,errors
-    result = {'method':'Replay cached HTML and JavaScript built from previous live commit; install actual production v6 service worker',
+    result = {'method':'Replay cached HTML and JavaScript built from previous live commit; install actual production v7 service worker',
               'previous_source_commit':'cbc0cd9f3bfd6c82ffae17bcafe95975ea49c706',
               'old_blank_screen_reproduced_before_update':replay['old_blank_observed'],
-              'old_v4_cache_replaced_with_v6':True,'first_updated_android_launch_refreshed':True,
+              'old_v4_cache_replaced_with_v7':True,'first_updated_android_launch_refreshed':True,
               'camera_visible':True,'journal_interactive':True,'local_note_preserved':True,
               'repaired_shell_reopens_offline':True,'uncaught_browser_errors':errors}
     (artifacts / 'fieldlogger-startup-upgrade.json').write_text(json.dumps(result,indent=2)+'\n')

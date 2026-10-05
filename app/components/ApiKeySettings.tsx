@@ -160,9 +160,7 @@ export default function ApiKeySettings({
         </label>
         <p className="small muted">
           Saving enables automatic identification of pending photos. OpenAI
-          charges your API account for analysis and the small connection test. A
-          20-minute key stops working when it expires; you can return here with
-          a replacement.
+          charges your API account for analysis and the small connection test.
         </p>
         <button
           className="button primary full"

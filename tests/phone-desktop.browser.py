@@ -27,11 +27,11 @@ with sync_playwright() as p:
         expect(page.locator('.mobile-nav')).to_be_visible()
         zoom = page.evaluate('Number(getComputedStyle(document.documentElement).zoom)')
         assert abs(zoom-ratio) < .02, zoom
-        camera = page.get_by_role('button',name='Take a photo',exact=True)
+        camera = page.get_by_role('button',name='Camera',exact=True)
         expect(camera).to_be_visible()
         box = camera.bounding_box(); navigation = page.locator('.mobile-nav').bounding_box()
         assert box['height']/ratio >= 60
-        assert box['y']+box['height'] < navigation['y']
+        assert box['y']+box['height'] <= navigation['y']+navigation['height']
         assert not page.evaluate('document.documentElement.scrollWidth > innerWidth')
         for button in page.locator('.mobile-nav button').all():
             assert button.bounding_box()['height']/ratio >= 48
@@ -48,7 +48,7 @@ with sync_playwright() as p:
         photo = page.locator('.capture-photo').bounding_box()
         assert photo['height']/ratio >= height*.4
         page.get_by_role('button',name='Save discovery',exact=True).click()
-        expect(page.get_by_role('heading',name='A little mystery',exact=True)).to_be_visible()
+        expect(page.locator('.journal-photo').first).to_be_visible()
         session.send('Emulation.setPageScaleFactor',{'pageScaleFactor':1.5})
         assert page.evaluate('visualViewport.scale') > 1
         assert abs(page.evaluate('Number(getComputedStyle(document.documentElement).zoom)')-ratio) < .02

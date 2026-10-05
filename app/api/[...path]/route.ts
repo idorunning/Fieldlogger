@@ -1,3 +1,4 @@
+import { reversePlace } from "@/lib/place-server";
 import { z } from "zod";
 import {
   bindings,
@@ -148,6 +149,7 @@ async function handle(request: Request) {
       Number(request.headers.get("content-length") || 0) > 6 * 1024 * 1024
     )
       return json({ error: "Image is too large." }, 413);
+    if (path[0] === "place" && request.method === "GET") return await reversePlace(request);
     if (path[0] === "status") {
       const viewer = await getUser(request);
       const saved = viewer ? await keyStatus(viewer.id) : null;

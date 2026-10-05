@@ -4,51 +4,33 @@ button, a { touch-action: manipulation; }
 .button, .text-button, .icon-button, .profile-button, .filter-toggle { min-height: 48px; }
 .icon-button { width: 48px; min-width: 48px; height: 48px; }
 .mobile-brand { border: 0; background: none; cursor: pointer; }
-.view-discover .main-content { padding: 0 0 110px; max-width: none; }
+.view-discover .main-content { padding: 0; max-width: none; }
 .view-discover .topbar { position: absolute; top: 0; right: 0; left: 240px; z-index: 12; background: transparent; color: #fff; border: 0; }
 .view-discover .breadcrumb { color: #fff; }
 .view-discover .sync-status { color: #fff; background: #102b20b3; border: 1px solid #ffffff33; border-radius: 24px; padding: 8px 12px; }
 .view-discover .profile-button, .view-discover .topbar .icon-button { color: #fff; background: #ffffff18; }
-.discover-stage { position: relative; min-height: min(900px, calc(100svh / var(--phone-layout-scale, 1))); color: #fff; overflow: hidden; background: #153b2d; }
-.discover-backdrop { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 53% 46%; }
-.discover-shade { position: absolute; inset: 0; background: linear-gradient(180deg, #071e258c 0%, #0b241016 30%, #0c20193b 48%, #051e18e8 100%); }
-.discover-caption { position: absolute; top: 112px; left: 56px; display: flex; gap: 9px; align-items: center; font-size: .875rem; font-weight: 550; }
-.live-dot { height: 7px; width: 7px; background: #d7e9a2; border-radius: 50%; box-shadow: 0 0 0 4px #d7e9a222; }
-.discover-composition { position: relative; padding: 240px 56px 32px; min-height: min(900px, calc(100svh / var(--phone-layout-scale, 1))); display: flex; flex-direction: column; justify-content: flex-end; max-width: 780px; }
-.discover-eyebrow { color: #d7e9a2; letter-spacing: .15em; font-size: .75rem; font-weight: 700; margin-bottom: 17px; }
-.discover-composition h1 { font-size: clamp(2.7rem, calc(5vw / var(--phone-layout-scale, 1)), 4.8rem); color: #fff; letter-spacing: -.035em; line-height: 1.04; }
-.discover-subtitle { color: #edf3e5; font-size: 1rem; margin: 18px 0 30px; }
-.discover-controls { display: grid; gap: 12px; max-width: 440px; }
-.shutter-action { padding: 11px 15px 11px 11px; border: 0; border-radius: 22px; display: flex; gap: 15px; align-items: center; text-align: left; width: 100%; min-height: 86px; background: #f5f9ee; color: #153b2d; box-shadow: 0 12px 35px #071c1629; }
-.shutter-action > span:nth-child(2) { flex: 1; font-size: 1.25rem; font-weight: 700; line-height: 1.35; }
-.shutter-action small { display: block; font-size: .8125rem; font-weight: 450; margin-top: 3px; color: #596c56; }
-.shutter-icon { width: 62px; height: 62px; display: grid; place-items: center; border-radius: 50%; background: #dcebad; flex-shrink: 0; }
-.gallery-action { background: #ffffff16; color: #fff; border: 1px solid #ffffff68; min-height: 56px; border-radius: 18px; display: flex; align-items: center; justify-content: center; gap: 12px; font-weight: 600; font-size: 1rem; backdrop-filter: blur(8px); }
-.below-fold { display: flex; align-items: center; gap: 10px; background: none; border: 0; color: #e8efdf; margin-top: 23px; padding: 0; min-height: 44px; font-size: .875rem; align-self: flex-start; }
-.discover-below { padding: 35px 45px 10px; max-width: 1200px; margin: auto; scroll-margin-top: 20px; }
-.discover-below h2 { font-size: 2rem; }
-.discover-below .section-label { color: #74816c; margin-bottom: 9px; font-size: .75rem; }
-.home-empty-note { color: #5f715a; font-size: 1rem; max-width: 430px; margin-top: 20px; }
-.inspiration-heading { margin-top: 36px; }
-.inspiration-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; }
-.inspiration-photo { position: relative; height: 250px; padding: 0; background: #153b2d; border: 0; border-radius: 22px; overflow: hidden; color: #fff; text-align: left; }
-.inspiration-photo::after { content: ""; position: absolute; inset: 0; background: linear-gradient(transparent 40%, #071f16cc); }
-.inspiration-photo img { height: 100%; width: 100%; object-fit: cover; }
-.inspiration-photo span { position: absolute; bottom: 20px; left: 20px; z-index: 1; }
-.inspiration-photo strong { display: block; font-size: 1.125rem; }
-.inspiration-photo small { display: block; font-size: .875rem; color: #e3ecd9; margin-bottom: 3px; }
-.inspiration-photo > svg { position: absolute; bottom: 24px; right: 20px; z-index: 1; }
-.home-guide { background: #eaf0e1; border: 0; border-radius: 20px; min-height: 80px; display: flex; align-items: center; text-align: left; padding: 16px 20px; gap: 15px; width: 100%; margin-top: 28px; }
-.home-guide > span { flex: 1; font-weight: 600; font-size: 1rem; }
-.home-guide small { display: block; font-weight: 400; color: #617359; font-size: .875rem; margin-top: 4px; }
-.home-credit { color: #6f7d66; font-size: .75rem; margin-top: 15px; }
-.recent-photos { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; }
-.recent-photo { background: #fff; border: 0; border-radius: 22px; overflow: hidden; text-align: left; padding: 0; position: relative; box-shadow: 0 5px 20px #143c2410; }
-.recent-photo > img { width: 100%; height: 250px; object-fit: cover; display: block; }
-.recent-photo > div { padding: 16px 18px; }
-.recent-photo strong { display: block; font-size: 1.125rem; line-height: 1.35; }
-.recent-photo > div > span { font-size: .875rem; color: #65735d; display: flex; align-items: center; gap: 5px; margin-top: 7px; }
-.recent-pending { position: absolute; top: 15px; right: 15px; color: #fff; background: #1d352866; box-sizing: content-box; padding: 8px; border-radius: 50%; }
+/* The journal itself is the home screen. Woodland stays behind personal photos. */
+.journal-home { position: relative; min-height: calc(100svh / var(--phone-layout-scale, 1)); background: #173f35; isolation: isolate; }
+.discover-backdrop { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 53% 46%; z-index: -2; }
+.discover-shade { position: absolute; inset: 0; background: linear-gradient(#092c26aa, #12382c55 45%, #092c26aa); z-index: -1; }
+.journal-surface { padding: 105px 36px 35px; max-width: 1200px; margin: auto; }
+.journal-home-heading { display: flex; gap: 12px; align-items: center; justify-content: space-between; color: #fff; margin-bottom: 18px; }
+.journal-home-heading h1 { font-size: 2.1rem; color: #fff; line-height: 1.15; }
+.journal-home-heading p { font-size: .875rem; color: #e3ebdc; margin-top: 6px; }
+.journal-home-tools { display: flex; gap: 4px; flex-shrink: 0; }
+.journal-home-tools button { color: #fff; background: #173f3570; border: 1px solid #ffffff30; border-radius: 50%; }
+.journal-photo-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.journal-photo { position: relative; display: block; aspect-ratio: .82; padding: 0; border: 1px solid #ffffff44; border-radius: 24px; overflow: hidden; background: #254d3f; color: #fff; text-align: left; box-shadow: 0 8px 25px #061b2333; }
+.journal-photo > img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.journal-photo-caption { position: absolute; inset: auto 0 0; padding: 60px 20px 20px; background: linear-gradient(transparent, #06231cea 55%); }
+.journal-photo-caption strong { display: block; font-size: 1.3rem; line-height: 1.2; overflow-wrap: anywhere; }
+.journal-photo-caption span { display: flex; align-items: center; gap: 5px; margin-top: 8px; font-size: .875rem; overflow-wrap: anywhere; }
+.journal-photo-caption span svg { flex-shrink: 0; }
+.journal-photo-caption time { display: block; font-size: .75rem; color: #d7e5d0; margin-top: 7px; }
+.recent-pending { position: absolute; top: 15px; right: 15px; color: #fff; background: #1d352877; box-sizing: content-box; padding: 8px; border-radius: 50%; }
+.journal-home-empty { margin-top: 12px; padding: 36px 24px; color: white; background: #0f342b99; border: 1px solid #ffffff33; border-radius: 24px; }
+.journal-home-empty h2 { color: #fff; font-size: 1.8rem; margin: 18px 0 12px; }
+.journal-home-empty p { max-width: 300px; line-height: 1.6; color: #edf1e8; }
 .capture-save { padding: 16px 0 5px; }
 .capture-save .button { min-height: 60px; font-size: 1.125rem; border-radius: 16px; }
 .capture-save p { display: flex; align-items: center; gap: 7px; font-size: .875rem; color: #65725c; padding-top: 10px; }
@@ -69,22 +51,19 @@ button, a { touch-action: manipulation; }
   .view-discover .topbar .profile-button > span:not(.avatar) { display: none; }
   .view-discover .topbar .profile-button { padding: 0; width: 48px; justify-content: center; }
   .view-discover .topbar .profile-button > svg:last-child:not(:first-child) { display: none; }
-  .view-discover .main-content { padding-bottom: calc(100px + env(safe-area-inset-bottom)); }
-  .discover-stage { min-height: calc(calc(100svh / var(--phone-layout-scale, 1)) - 84px - env(safe-area-inset-bottom)); }
-  .discover-composition { padding: 195px 24px 18px; min-height: calc(calc(100svh / var(--phone-layout-scale, 1)) - 84px - env(safe-area-inset-bottom)); }
-  .discover-caption { top: calc(102px + env(safe-area-inset-top)); left: 26px; font-size: .875rem; }
-  .discover-composition h1 { font-size: clamp(2.5rem, calc(10.8vw / var(--phone-layout-scale, 1)), 3.5rem); }
-  .discover-eyebrow { font-size: .75rem; margin-bottom: 13px; }
-  .discover-subtitle { margin: 15px 0 24px; }
-  .discover-controls { max-width: none; }
-  .below-fold { margin-top: 13px; }
-  .discover-below { padding: 30px 22px 10px; }
-  .discover-below h2 { font-size: 1.8rem; }
-  .inspiration-grid { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px; scroll-snap-type: x mandatory; }
-  .inspiration-photo { min-width: 78%; height: 260px; scroll-snap-align: start; }
-  .recent-photos { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px; scroll-snap-type: x mandatory; }
-  .recent-photo { min-width: 85%; scroll-snap-align: start; }
-  .recent-photo > img { height: 265px; }
+  .view-discover .main-content { padding-bottom: 0; }
+  .journal-home { padding-bottom: calc(100px + env(safe-area-inset-bottom)); }
+  .journal-surface { padding: calc(90px + env(safe-area-inset-top)) 18px 24px; }
+  .journal-home-heading { flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+  .main-content .journal-home-heading h1 { font-size: 1.55rem; }
+  .journal-home-heading p { font-size: .8125rem; }
+  .journal-photo-grid { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .journal-photo { aspect-ratio: .86; }
+  .topbar .sync-status, .topbar .profile-button > span:not(.avatar) { display: none; }
+  .topbar .profile-button { padding: 0; width: 48px; min-width: 48px; justify-content: center; }
+  .topbar .mobile-brand { white-space: nowrap; font-size: 1.55rem; gap: 6px; }
+  .topbar { padding-left: 18px; padding-right: 18px; }
+  .topbar-actions { gap: 4px; }
   .main-content { padding-left: 22px; padding-right: 22px; }
   .main-content h1 { font-size: 2.3rem; }
   .page-heading > div > .muted { font-size: 1rem; }
@@ -137,10 +116,8 @@ button, a { touch-action: manipulation; }
   .account-nudge { flex-wrap: wrap; padding: 22px; }
   .account-nudge strong, .account-nudge p { font-size: 1rem; }
 }
-@media (max-height: 680px) and (max-width: 800px), (max-height: 680px) and (pointer: coarse) and (hover: none) { .discover-composition { padding-top: 175px; } .discover-composition h1 { font-size: 2.45rem; } .discover-subtitle { margin: 12px 0 18px; } }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
 
-@media (max-width: 800px), (pointer: coarse) and (hover: none) { .view-discover .discover-composition h1 { font-size: clamp(2.5rem, calc(10.8vw / var(--phone-layout-scale, 1)), 3.5rem); } .inspiration-photo:first-child img { object-position: 50% 55%; } .inspiration-photo:nth-child(2) img { object-position: 30% 50%; } .inspiration-photo:nth-child(3) img { object-position: 65% 50%; } }
 
 .legal-page { max-width: 740px; margin: auto; padding: 40px 24px 70px; }
 .legal-page .eyebrow { margin-top: 35px; }

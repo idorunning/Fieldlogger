@@ -6,6 +6,8 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type Dispatch,
+  type SetStateAction,
 } from "react";
 import {
   Leaf,
@@ -56,12 +58,15 @@ import {
 } from "@/lib/types";
 import {
   listLocal,
+  attachLateGps,
+  fillMissingPlaces,
   saveLocal,
   syncRecords,
   requestPersistentStorage,
   getMeta,
   setMeta,
 } from "@/lib/local";
+import { lookupPlace } from "@/lib/place";
 import { preparePhoto, locate, localDate } from "@/lib/photo";
 import { useAuth } from "./AuthProvider";
 import MapView from "./MapView";
@@ -79,7 +84,7 @@ const icons = {
   other: Compass,
 };
 const nav = [
-  { id: "discover" as View, label: "Discover", icon: Compass },
+  { id: "discover" as View, label: "My journal", icon: BookOpen },
   { id: "journal" as View, label: "Field journal", icon: BookOpen },
   { id: "map" as View, label: "Discovery map", icon: MapIcon },
   { id: "collection" as View, label: "My collection", icon: Leaf },
@@ -271,6 +276,8 @@ function Login({ onClose }: { onClose: () => void }) {
   );
 }
 type Draft = {
+  id: string;
+  pendingGps: Promise<GeolocationPosition | null> | null;
   photo: Blob;
   date: string;
   latitude: number | null;
@@ -290,7 +297,7 @@ function Capture({
   busy,
 }: {
   draft: Draft;
-  setDraft: (d: Draft) => void;
+  setDraft: Dispatch<SetStateAction<Draft | null>>;
   onSave: () => Promise<void>;
   onClose: () => void;
   busy: boolean;
@@ -301,15 +308,15 @@ function Capture({
     setLocating(true);
     try {
       const p = await locate();
-      setDraft({
-        ...draft,
+      setDraft(current => current?.id === draft.id ? {
+        ...current,
         latitude: p.coords.latitude,
         longitude: p.coords.longitude,
         accuracy: p.coords.accuracy,
         locationSource: "gps",
-      });
+      } : current);
       setMessage(
-        "Current location added. Use this only if this is where the photo was taken.",
+        "Location added.",
       );
     } catch {
       setMessage(
@@ -319,6 +326,12 @@ function Capture({
       setLocating(false);
     }
   }
+  useEffect(() => {
+    if (draft.place.trim() || !validCoords(draft.latitude, draft.longitude)) return;
+    void lookupPlace(draft.latitude, draft.longitude).then(place => {
+      if (place) setDraft(current => current?.id === draft.id && !current.place.trim() && current.latitude === draft.latitude && current.longitude === draft.longitude ? { ...current, place } : current);
+    });
+  }, [draft.id, draft.latitude, draft.longitude, draft.place, setDraft]);
   return (
     <Dialog title="A new discovery" onClose={onClose}>
       <Photo
@@ -338,7 +351,7 @@ function Capture({
           )}{" "}
           {busy ? "Saving…" : "Save discovery"}
         </button>
-<p><MapPin size={17} />{validCoords(draft.latitude, draft.longitude) ? "Location saved with your photo" : "You can add a location below"}</p></div>
+<p><MapPin size={17} />{validCoords(draft.latitude, draft.longitude) ? (draft.place || "GPS attached · place name added when online") : (draft.pendingGps ? "Finding location automatically…" : "You can add a location below")}</p></div>
       <details className="capture-details"><summary>Add details <span>Optional</span><ChevronRight size={21} /></summary>
       <div className="form-stack">
         <label>
@@ -937,7 +950,7 @@ export default function Fieldnotes() {
     }
   }, [owner, toast]);
   const sync = useCallback(async () => {
-    if (syncLock.current || owner === "guest" || !navigator.onLine) return;
+    if (syncLock.current || !navigator.onLine) return;
     syncLock.current = true;
     setSyncing(true);
     try {
@@ -1105,7 +1118,10 @@ export default function Fieldnotes() {
         date = result.exifDate || new Date();
       const lat = result.gps?.latitude ?? gps?.coords.latitude ?? null,
         lng = result.gps?.longitude ?? gps?.coords.longitude ?? null;
+      const id = crypto.randomUUID();
+      const pendingGps = source === "camera" && !result.gps ? gpsRef.current : null;
       setDraft({
+        id, pendingGps,
         photo: result.photo,
         date: `${localDate(date)}T${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`,
         latitude: lat,
@@ -1117,6 +1133,11 @@ export default function Fieldnotes() {
         category: "other",
         name: "",
       });
+      if (pendingGps) void pendingGps.then(position => setDraft(current => {
+        if (current?.id !== id) return current;
+        if (!position || validCoords(current.latitude, current.longitude)) return { ...current, pendingGps: null };
+        return { ...current, pendingGps: null, latitude: position.coords.latitude, longitude: position.coords.longitude, accuracy: position.coords.accuracy, locationSource: "gps" };
+      }));
     } catch (e) {
       toast((e as Error).message);
     } finally {
@@ -1136,7 +1157,7 @@ export default function Fieldnotes() {
       const date = new Date(draft.date);
       if (isNaN(date.valueOf())) throw Error("Please enter a valid date.");
       const record: Observation = {
-        id: crypto.randomUUID(),
+        id: draft.id,
         owner,
         capturedAt: date.toISOString(),
         localDate: localDate(date),
@@ -1160,9 +1181,17 @@ export default function Fieldnotes() {
         revision: 1,
       };
       await saveLocal(record);
+      const pendingGps = draft.pendingGps;
+      void (async () => {
+        const position = await pendingGps;
+        if (position) await attachLateGps(record.id, record.owner, position);
+        await fillMissingPlaces(record.owner, () => void refresh());
+        await refresh();
+        void sync();
+      })().catch(() => {});
       void requestPersistentStorage();
       setDraft(null);
-      setView("journal");
+      setView("discover");
       setCategory("all");
       setQuery("");
       setFrom("");
@@ -1310,7 +1339,7 @@ export default function Fieldnotes() {
       </aside>
       <div className="main-shell">
         <header className="topbar">
-          <button onClick={() => setView("discover")} className="mobile-brand" aria-label="Discover home">
+          <button onClick={() => setView("discover")} className="mobile-brand" aria-label="Journal home">
             <Leaf size={22} />
             Field Logger
           </button>
@@ -1356,6 +1385,7 @@ export default function Fieldnotes() {
                 user ? setAccountOpen(true) : setLogin(true)
               }
               title={user ? "Your account" : "Create account or sign in"}
+              aria-label={user ? "Your account" : "Create account or sign in"}
             >
               {user ? (
                 <span className="avatar">
@@ -1393,7 +1423,7 @@ export default function Fieldnotes() {
               New discovery
             </button>
           </div>}
-          {view === "discover" && <DiscoveryHome records={records} online={online} busy={busy} onCamera={openCamera} onGallery={() => galleryRef.current?.click()} onJournal={() => setView("journal")} onOpen={setSelected} onGuide={() => setView("sources")} />}
+          {view === "discover" && <DiscoveryHome records={records} online={online} busy={busy} onGallery={() => galleryRef.current?.click()} onJournal={() => setView("journal")} onOpen={setSelected} />}
           {!online && view !== "discover" && (
             <div className="offline-banner">
               <WifiOff size={18} />
@@ -1987,11 +2017,11 @@ export default function Fieldnotes() {
                   state: "Research reference",
                 },
                 {
-                  name: "OpenStreetMap",
+                  name: "OpenStreetMap & Photon",
                   role: "Puts discoveries in their place",
-                  text: "Provides the map underneath your colour-coded dots. Standard map tiles need a connection and are not downloaded in bulk for offline use.",
+                  text: "OpenStreetMap provides your map and nearby place names through the open-source Photon geocoder. Place lookups are cached and retried when online. Standard map tiles need a connection and are not downloaded in bulk for offline use.",
                   url: "https://www.openstreetmap.org/copyright",
-                  state: "© OpenStreetMap contributors",
+                  state: "© OpenStreetMap contributors · place names via Photon",
                 },
               ].map((s, i) => (
                 <article className="source-card" key={s.name}>
@@ -2090,8 +2120,8 @@ export default function Fieldnotes() {
       </div>
       <nav className="mobile-nav" aria-label="Main navigation">
         <button
-          className={view === "journal" ? "active" : ""}
-          onClick={() => setView("journal")}
+          className={view === "journal" || view === "discover" ? "active" : ""}
+          onClick={() => setView("discover")}
         >
           <BookOpen size={22} />
           <span>Journal</span>
@@ -2105,14 +2135,14 @@ export default function Fieldnotes() {
         </button>
         <button
           className="mobile-capture"
-          aria-label="Take a discovery photo"
+          aria-label="Camera"
           onClick={openCamera}
           disabled={busy}
         >
           <span>
             <Camera size={25} />
           </span>
-          <small>Discover</small>
+          <small>Camera</small>
         </button>
         <button
           className={view === "collection" ? "active" : ""}
@@ -2149,6 +2179,7 @@ export default function Fieldnotes() {
         <div className="account-actions form-stack">
           <button className="button primary full" onClick={() => { setAccountOpen(false); setKeySettings(true); }}><Sparkles size={22} />Photo identification settings</button>
           <button className="button secondary full" onClick={backup} disabled={!records.length}><Download size={22} />Export my journal</button>
+          <button className="button secondary full" onClick={() => { setAccountOpen(false); setView("sources"); }}><CircleHelp size={22} />Sources & offline help</button>
           <a className="button secondary full" href="/privacy">Privacy & your data</a>
           <a className="button secondary full" href="/delete-account">Delete account</a>
           <button className="button secondary full" onClick={() => void signOut().then(() => setAccountOpen(false)).catch(e => toast(e.message))}><LogOut size={22} />Sign out</button>

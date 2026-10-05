@@ -1,5 +1,5 @@
 /* App shell and original photos are separate: API responses are never cached. */
-const CACHE = "fieldnotes-shell-v6";
+const CACHE = "fieldnotes-shell-v7";
 const SHELL = [
   "/",
   "/privacy",
@@ -38,7 +38,7 @@ self.addEventListener("activate", (event) => {
       // new shell assets are cached. Ordinary journal sessions stay in place.
       for (const client of await self.clients.matchAll({ type: "window" })) {
         const url = new URL(client.url);
-        if (client.visibilityState === "visible" && url.pathname === "/" && ["1.0.2", "1.0.3"].includes(url.searchParams.get("app_version"))) {
+        if (client.visibilityState === "visible" && url.pathname === "/" && ["1.0.2", "1.0.3", "1.0.4"].includes(url.searchParams.get("app_version"))) {
           url.searchParams.delete("app_version");
           // Do not await navigation inside activation: its fetch waits for
           // this worker to activate, so awaiting it would stall both sides.

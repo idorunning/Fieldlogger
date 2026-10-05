@@ -1,3 +1,4 @@
+import { lookupPlace } from "./place";
 import { openDB, type DBSchema } from "idb";
 import {
   type Observation,
@@ -5,6 +6,7 @@ import {
   type Identification,
   type ObservationWire,
   toWire,
+  validCoords,
 } from "./types";
 interface FieldDB extends DBSchema {
   observations: { key: string; value: Observation; indexes: { owner: string } };
@@ -48,7 +50,9 @@ export async function requestPersistentStorage() {
   }
 }
 export async function syncRecords(owner: string, notify: () => void) {
-  if (owner === "guest" || !navigator.onLine) return;
+  if (!navigator.onLine) return;
+  await fillMissingPlaces(owner, notify);
+  if (owner === "guest") return;
   const current = await fetch("/api/auth/me", { cache: "no-store" });
   if (!current.ok) return;
   const { user } = (await current.json()) as { user: User | null };
@@ -144,6 +148,7 @@ export async function syncRecords(owner: string, notify: () => void) {
     }
     await saveLocal({ ...remote, owner, photo, syncState: "synced" });
   }
+  await fillMissingPlaces(owner, notify);
   notify();
 }
 
@@ -153,5 +158,29 @@ export async function clearLocalAccount(owner: string) {
   const keys = await tx.objectStore("observations").index("owner").getAllKeys(owner);
   for (const key of keys) await tx.objectStore("observations").delete(key);
   await tx.objectStore("meta").delete("activeUser");
+  await tx.done;
+}
+
+// Re-read inside a transaction so a delayed lookup cannot overwrite a field edit.
+export async function fillMissingPlaces(owner: string, notify: () => void) {
+  for (const record of (await listLocal(owner)).filter(r => !r.place.trim() && validCoords(r.latitude, r.longitude)).slice(0, 20)) {
+    const place = await lookupPlace(record.latitude, record.longitude);
+    if (!place) continue;
+    const tx = (await db()).transaction("observations", "readwrite");
+    const latest = await tx.store.get(record.id);
+    if (latest && latest.owner === owner && !latest.place.trim() && latest.latitude === record.latitude && latest.longitude === record.longitude) {
+      await tx.store.put({ ...latest, place, updatedAt: new Date().toISOString(), revision: latest.revision + 1, syncState: "pending" });
+    }
+    await tx.done;
+    notify();
+  }
+}
+export async function attachLateGps(id: string, owner: string, position: GeolocationPosition) {
+  const tx = (await db()).transaction("observations", "readwrite");
+  const record = await tx.store.get(id);
+  if (record && record.owner === owner && !validCoords(record.latitude, record.longitude)) {
+    await tx.store.put({ ...record, latitude: position.coords.latitude, longitude: position.coords.longitude,
+      accuracy: position.coords.accuracy, locationSource: "gps", updatedAt: new Date().toISOString(), revision: record.revision + 1, syncState: "pending" });
+  }
   await tx.done;
 }
