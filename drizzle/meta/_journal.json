@@ -29,6 +29,41 @@
       "when": 1791230440710,
       "tag": "0003_tidy_firedrake",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1791235634195,
+      "tag": "0004_pretty_doctor_spectrum",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1791236237701,
+      "tag": "0005_spotty_rumiko_fujikawa",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1791236997644,
+      "tag": "0006_freezing_mach_iv",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1791237689541,
+      "tag": "0007_gifted_nomad",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1791238731977,
+      "tag": "0008_sturdy_quasar",
+      "breakpoints": true
     }
   ]
 }

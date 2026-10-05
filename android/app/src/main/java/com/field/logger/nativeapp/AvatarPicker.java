@@ -11,8 +11,23 @@ public final class AvatarPicker {
     void accept(JSONObject avatar);
   }
 
+  static JSONObject manualDraft(JSONObject current) {
+    // A manual character never keeps generated image URLs or server revision identifiers.
+    JSONObject draft = new JSONObject();
+    for (int i = 0; i < AvatarView.KEYS.length; i++)
+      Observation.put(
+          draft,
+          AvatarView.KEYS[i],
+          Math.max(
+              0,
+              Math.min(
+                  AvatarView.CHOICES[i].length - 1,
+                  current == null ? 0 : current.optInt(AvatarView.KEYS[i]))));
+    return draft;
+  }
+
   public static void show(Context c, JSONObject current, Selected selected) {
-    JSONObject draft = current == null ? new JSONObject() : Observation.copy(current);
+    JSONObject draft = manualDraft(current);
     LinearLayout content = new LinearLayout(c);
     content.setOrientation(LinearLayout.VERTICAL);
     int dp = Math.round(c.getResources().getDisplayMetrics().density);
@@ -22,7 +37,7 @@ public final class AvatarPicker {
     pl.gravity = Gravity.CENTER;
     content.addView(preview, pl);
     TextView label = new TextView(c);
-    label.setText("Start with a character, then make it yours");
+    label.setText("An illustrated character, made by you. No photo or AI needed.");
     label.setTextColor(0xff154e45);
     content.addView(label);
     HorizontalScrollView presets = new HorizontalScrollView(c);
@@ -89,7 +104,7 @@ public final class AvatarPicker {
     ScrollView scroll = new ScrollView(c);
     scroll.addView(content);
     new AlertDialog.Builder(c)
-        .setTitle("Your explorer avatar")
+        .setTitle("Make my avatar")
         .setView(scroll)
         .setPositiveButton("Save avatar", (d, w) -> selected.accept(Observation.copy(draft)))
         .setNegativeButton("Cancel", null)

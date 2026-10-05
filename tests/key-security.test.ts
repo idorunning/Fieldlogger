@@ -28,11 +28,11 @@ test("key replacement uses fresh encryption and tampering is rejected", async ()
     unsealKey(JSON.stringify(edited), "owner", fixtureMaster),
   );
 });
-test("expired keys, denied permissions and quota failures are actionable without reflecting upstream secrets", () => {
+test("provider failures preserve photos without exposing credentials or setup instructions to members", () => {
   for (const [status, pattern] of [
-    [401, /expired/],
-    [403, /permissions/],
-    [429, /quota/],
+    [401, /temporarily unavailable/],
+    [403, /temporarily unavailable/],
+    [429, /busy or temporarily paused/],
     [500, /Try again/],
   ] as const) {
     assert.throws(
@@ -45,6 +45,8 @@ test("expired keys, denied permissions and quota failures are actionable without
       (error) => {
         assert.ok(error instanceof OpenAIConnectionError);
         assert.match(error.message, pattern);
+        assert.match(error.message,/photos are saved/i);
+        assert.doesNotMatch(error.message,/API|OpenAI|key|scope|project|permission|billing|quota|settings/i);
         assert.ok(!error.message.includes("sensitive upstream"));
         return true;
       },

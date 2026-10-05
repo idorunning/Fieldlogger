@@ -103,3 +103,90 @@ export const reports = sqliteTable('reports', {
   status: text('status').notNull().default('open'),
   createdAt: text('created_at').notNull(),
 });
+
+export const memberAccess = sqliteTable('member_access', {
+  userId: text('user_id').primaryKey().references(() => users.id,{onDelete:'cascade'}),
+  role: text('role').notNull().default('member'),
+  status: text('status').notNull().default('active'),
+  updatedAt: text('updated_at').notNull(),
+});
+export const adminAudit = sqliteTable('admin_audit', {
+  id: text('id').primaryKey(),
+  actorId: text('actor_id'),
+  targetId: text('target_id'),
+  action: text('action').notNull(),
+  createdAt: text('created_at').notNull(),
+});
+export const subscriptions = sqliteTable('subscriptions', {
+  tokenHash: text('token_hash').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id,{onDelete:'cascade'}),
+  tokenEnvelope: text('token_envelope').notNull(),
+  productId: text('product_id').notNull(),
+  plan: text('plan').notNull(),
+  status: text('status').notNull(),
+  startsAt: text('starts_at').notNull(),
+  expiresAt: text('expires_at').notNull(),
+  checkedAt: integer('checked_at').notNull(),
+  acknowledged: integer('acknowledged').notNull().default(0),
+  isTrial: integer('is_trial').notNull().default(0),
+  paidPeriodStart: text('paid_period_start'),
+  paidPeriodEnd: text('paid_period_end'),
+  latestOrderId: text('latest_order_id'),
+},t=>[index('subscriptions_user_expiry').on(t.userId,t.expiresAt)]);
+// Not deleted when a photo is archived/removed: those actions cannot reset quota.
+export const photoAllowance = sqliteTable('photo_allowance', {
+  observationId: text('observation_id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id,{onDelete:'cascade'}),
+  period: text('period').notNull(),
+  bonusYear: text('bonus_year'),
+  createdAt: text('created_at').notNull(),
+},t=>[index('photo_allowance_owner_period').on(t.userId,t.period)]);
+export const avatarGenerations = sqliteTable('avatar_generations', {
+  userId: text('user_id').notNull().references(() => users.id,{onDelete:'cascade'}),
+  period: text('period').notNull(),
+  used: integer('used').notNull().default(0),
+  lockedUntil: integer('locked_until').notNull().default(0),
+  token: text('token'),
+},t=>[primaryKey({columns:[t.userId,t.period]})]);
+export const aiUsage = sqliteTable('ai_usage', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id,{onDelete:'cascade'}),
+  observationId: text('observation_id'),
+  period: text('period').notNull(),
+  purpose: text('purpose').notNull(),
+  model: text('model').notNull(),
+  inputTokens: integer('input_tokens').notNull(),
+  outputTokens: integer('output_tokens').notNull(),
+  microUsd: integer('micro_usd').notNull(),
+  createdAt: text('created_at').notNull(),
+},t=>[index('ai_usage_user_period').on(t.userId,t.period)]);
+// Anonymous provider-cost accounting survives account deletion while a request
+// is in flight. No account, photograph or credential fields belong here.
+export const aiReservations = sqliteTable('ai_reservations', {
+  id: text('id').primaryKey(),
+  dayKey: text('day_key').notNull(),
+  reservedMicroUsd: integer('reserved_micro_usd').notNull(),
+  settledMicroUsd: integer('settled_micro_usd'),
+  createdAt: text('created_at').notNull(),
+  settledAt: text('settled_at'),
+});
+export const publicationChecks = sqliteTable('publication_checks', {
+  observationId: text('observation_id').primaryKey().references(() => observations.id,{onDelete:'cascade'}),
+  contentHash: text('content_hash').notNull(),
+  decision: text('decision').notNull(),
+  checkedAt: text('checked_at').notNull(),
+});
+export const serviceConfig = sqliteTable('service_config', {
+  key: text('key').primaryKey(),
+  envelope: text('envelope').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+// Completed model stages survive an interrupted final save, preventing paid
+// first-pass or closer-review calls from being repeated for immutable photos.
+export const identificationStages = sqliteTable('identification_stages', {
+  observationId: text('observation_id').notNull().references(() => observations.id,{onDelete:'cascade'}),
+  userId: text('user_id').notNull().references(() => users.id,{onDelete:'cascade'}),
+  stage: text('stage').notNull(),
+  data: text('data').notNull(),
+  createdAt: text('created_at').notNull(),
+},t=>[primaryKey({columns:[t.observationId,t.stage]}),index('identification_stages_owner').on(t.userId)]);

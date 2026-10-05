@@ -1,83 +1,59 @@
 # My Trail Log
 
-A mobile-first personal countryside discovery journal: photograph something, save the moment and place, then explore what it might be. The product rewards variety and curiosity, not distance or walking totals.
+A nature photo journal for noticing, discovering and remembering. The native Android app is a dated woodland scrapbook; the separately designed desktop website presents the service, policies and membership administration. Curiosity and variety matter, not distance or walk totals.
 
-## Current status
+## Release 2.4.0
 
-The web app includes private API-key settings at `/#api-key`. Sign in or create your journal account, paste your key into the masked field, and choose **Save key**, then **Test connection**. Keys can be replaced or removed here later. No key needs to be sent in chat. Identification remains unavailable until a working key is configured; the app never invents successful analysis.
+Android package **com.field.logger**, version code **11**, min SDK **24**, target SDK **36**. The original upload key is retained. Native CameraX, SQLite/private photo files and WorkManager are used; the app does not render a website through a WebView/TWA.
 
-Account keys are encrypted with AES-256-GCM before storage. The encryption key is a Sites runtime secret, separate from the database, source and browser bundles. See `docs/API-KEY-SETUP.md` for operation and test coverage. Live OpenAI identification has been verified on the deployed app with an explicitly authorized temporary test key. Replace it through the private key settings when needed.
+- Photos save locally before network work, with capture date/time and foreground GPS/place names when available. Previously granted location permission is reused; there is no continuous/background location tracking.
+- Scrapbook day stacks, lower-right acorns, short interesting facts, branded share stories, collection, archive/restore and organised settings.
+- **352 permanent achievements** in colour-coded Soil, Clay, Flint, Quartz, Amber and Gold layers, with progressively revealed species/time/date/place challenges.
+- Optional **Make my avatar** creates an illustrated cartoon from a consented portrait. The source is re-encoded to remove metadata, processed transiently and sent to OpenAI; My Trail Log never stores or publishes it. Only the checked generated cartoon becomes the profile. Provider retention terms apply.
+- Community audiences: everyone signed in, a selected browsed map circle or accepted private invitations. Publishing is explicit, checks fail closed, and report/block/unpublish controls remain available.
+- Native photo map clustering merges markers when zooming out and splits them when zooming in. Postcode/place, type/tree, acorn and photographed-area filters remain.
+- Optional reviewed-contact matching, periodic follower alerts, weather/time backgrounds and brief effects.
+- **Free ZIP cloud exports** include active/archived originals and available private metadata. They stream with backpressure/ZIP64 and never require paid entitlement. Unsynced device-only photos need a local backup or sync first.
+- Google Play Billing, account-bound server purchase verification, atomic photo/Closer Look allowances, restore and administration are implemented. **Prices are finalised; checkout remains disabled until real products, secure Google credentials and live purchase/lifecycle tests are ready.** Local capture, existing data and downloads remain free.
 
-## Included
+| Plan | New cloud photos / UTC month | Automatic Closer Looks / UTC month | UK price |
+| --- | ---: | ---: | --- |
+| Free | 100 | 5 | Free |
+| Plus | 150 | 30 | £5.99/month |
+| Premium | 300 | 60 | £11.99/month |
+| Premium annual | 300 | 60 | £119.99/year, plus 150 photos and 30 Closer Looks per verified paid year |
 
-- Mobile camera/gallery capture; EXIF GPS/date where available; explicit GPS request and editable capture date.
-- JPEG resize and EXIF removal, IndexedDB originals-as-resized, persistent-storage request, offline app shell.
-- Automatic foreground upload on reconnect, startup and visibility changes; Background Sync uploads when the browser supports them. Photos are saved before any network request.
-- Email/password registration, login, logout and account-scoped D1/R2 storage; adapted from the requested SEBP membership code. See `docs/SEBP-REUSE.md`.
-- Private API-key settings with masked entry, encrypted account-scoped storage, replacement/removal, connection testing and expiry guidance.
-- OpenAI Responses API identification with uncertainty, alternatives, capture context, visible clues, and a suggestion for looking closer.
-- Wikipedia extracts and GBIF scientific-name matching, cached with the discovery. Optional Pl@ntNet and BioCLIP adapters; no optional service has been provisioned.
-- Leaflet/OpenStreetMap map, category colours, accessible marker buttons and a corresponding list; search across names, notes and places; category and date filters.
-- Category counts, scientific-name collection, month chart and eight curiosity-based achievements.
-- User corrections and field notes; image-only sharing or a generated photo/story card. Exact GPS is not placed on shared images; place name is optional.
-- JSON journal export including photos, GPS and metadata.
+AI recognition uses an efficient first pass and an automatic stronger **Closer Look** for harder or uncertain photographs when allowance and service budgets permit. If review is unavailable, the app retains a tentative or broader result and its uncertainty. Repeated delivery of unchanged photographs reuses durable stage results. These are suggestions, not verified species accuracy or edibility/medical advice. Wikipedia and GBIF provide references; optional Pl@ntNet/BioCLIP adapters are not provisioned by this release. All AI service credentials remain server-side. See [the viability review](docs/SUBSCRIPTION-VIABILITY.md) and [subscription setup](docs/PLAY-SUBSCRIPTIONS-SETUP.md).
 
-## Source and hosting
+An eligible one-month Google Play trial provides the selected plan's photo and Closer Look limits as **totals across the whole trial**, even if it crosses UTC months. Trials grant no annual bonuses and are not created by registration. Annual base limits are capped at 3,600 photos and 720 Closer Looks per verified paid year; the 150/30 bonuses are additional. Live checkout readiness must be verified separately from a build.
 
-The source repository is [idorunning/Fieldlogger](https://github.com/idorunning/Fieldlogger), on `main`. Make changes in this repository. Sites still requires a matching source push to its deployment mirror and a build archive; pushing GitHub alone does not publish the website. Keep `.openai/hosting.json` and the existing database and image storage.
+## Website, operator and source
 
-`fieldlogger.co.uk` is attached to the existing deployment, and its DNS and HTTPS certificate have been verified active. See [docs/DOMAIN-SETUP.md](docs/DOMAIN-SETUP.md) for the retained records. The user approved My Trail Log password login as the sole app entry point for Android. Journal data and encrypted account keys remain private to each account.
+Current domain: **https://fieldlogger.co.uk**. Company/app site at `/`, browser journal at `/journal`, authorised administration at `/admin`. Policies cover privacy, terms, cookies/storage, community standards, support and account deletion. Current operator: Nathan Tracey; **Thinking About Ltd is proposed, not incorporated**. Support: ntracey@gmail.com. A replacement domain must be connected and verified before changing canonical URLs and Android links.
 
-## Run locally
+Repository: [idorunning/Fieldlogger](https://github.com/idorunning/Fieldlogger), main. GitHub changes alone do not publish the website: the existing Sites deployment requires the matching source/build archive. Retain `.openai/hosting.json`, DB and BUCKET bindings, existing user data and domain configuration.
 
-```sh
-npm ci
-npm run db:generate # only after changing db/schema.ts
-npx wrangler d1 execute DB --local --config wrangler.dev.jsonc --file drizzle/0000_brainy_bullseye.sql
-npx wrangler d1 execute DB --local --config wrangler.dev.jsonc --file drizzle/0001_strange_virginia_dare.sql
-npm run dev
-```
+Owner administration is pinned to the existing trusted account ID and ntracey@gmail.com, not granted merely by signing up with an email. Other administrators can be granted membership roles. Payment setup is separately restricted to the protected owner and requires fresh password verification. It accepts Google-issued JSON directly on the private HTTPS website, encrypts it server-side and never returns it. No credential belongs in chat, source, browser storage or an AAB. See [subscription setup](docs/PLAY-SUBSCRIPTIONS-SETUP.md).
 
-The migration command initializes a new local database; do not rerun the same SQL against an already initialized database. The development URL is printed by Vite. After a production build, preview with:
+## Local development
 
-```sh
-npm run build
-npx wrangler dev --config dist/server/wrangler.json --port 8787 --persist-to "$PWD/.wrangler/state"
-```
-
-Never package `.wrangler`, `.env*`, or local browser profiles. The app's D1 migrations are schema-only; QA accounts and public test photos were created through the local and deployed APIs; deployment output contains no seeded accounts or photos.
-
-## Checks
+Use Node 22.13+ and install with `npm ci`. Apply each schema migration once, in order, to a fresh local DB through `wrangler.dev.jsonc`; do not rerun existing migrations. Start with `npm run dev`. After changing the schema, generate a migration with `npm run db:generate` and review it before applying.
 
 ```sh
 npm run typecheck
 npm test
-node tests/api.integration.mjs # local Vite server, default localhost:5173
-python tests/browser.py        # production preview, default localhost:8787
+npm run build
+npx wrangler dev --config dist/server/wrangler.json --port 8787 --persist-to "$PWD/.wrangler/state"
 ```
 
-The browser acceptance test uses Playwright and `/usr/bin/chromium`, a disposable local account and a test photo. It covers offline save/reload, registration, automatic upload, GPS/map interaction, manual corrections, stats, achievements, sharing and filtering. Tests do not call OpenAI or the optional classifier services.
+Existing integration scripts in `tests/` use disposable accounts/local fixtures. Native framework/database tests cover API 24 and 36. Live tests and physical-device checks must be reported separately from mocked/provider-free tests.
 
-## Runtime configuration
+Server secrets stay in approved secure configuration. The shared OpenAI key and Google purchase tokens are server-encrypted with the separate runtime master secret. Owner-uploaded Play credentials use a distinct service/owner encryption context. Service configuration is excluded from member exports. Do not package `.env*`, `.wrangler`, signing keys, local browser profiles or provider credentials.
 
-Server secrets belong in ignored local environment files through approved secure setup, and in hosting secret configuration for deployment. No provider key belongs in browser JavaScript. Optional variable names are documented in `.env.example`; it contains no secrets.
+## Offline and operational limits
 
-The existing Site is `appgprj_6ac2d981043081919ee03d9ff57bf87e`; reuse `.openai/hosting.json`. Do not register a replacement. The website is publicly reachable, with account-scoped My Trail Log login protecting journal data and saved keys. Logical storage bindings are `DB` and `BUCKET`. Production build emits `dist/server/index.js`, `dist/client`, and `dist/.openai` for hosting metadata, and `dist/drizzle` for migrations. The deployment archive puts the latter two at `.openai/` and `drizzle/` at its root.
+Android can save photos offline on first launch. The browser journal must load online once; browser storage can be cleared/evicted. Android/browser scheduling and battery restrictions affect background sync and approximately 15-minute follower checks. A force-stop can delay work until reopening. Map tiles, searches, new weather and AI require connectivity; standard map tiles are not an offline download feature. GPS depends on the device and granted permissions.
 
-The Sites skill's local helper scripts were not installed in this environment. SEBP source was retrieved over its authenticated source repository and used as a retained build scaffold. Publication uses an exact-source push and validated build archive followed by native Sites deployment. Registration alone is not a live URL; check the native deployment result for the published status.
+Quota exhaustion defers new cloud uploads; it does not delete a local photo, block archive/data access or paywall export. Archive does not refund usage or delete data. Deleting a My Trail Log account does not cancel an existing Google Play subscription.
 
-## Offline limits
-
-The web app must load online once before it can reopen offline. The native Android app can capture and save offline from its first launch. IndexedDB contains resized JPEGs, capture metadata and downloaded field notes. Browser storage can be cleared or evicted; synced storage and exports provide copies. Background work is controlled by Android/browser scheduling; force-stopping the app can defer upload until reopening. Map tiles are online-only in accordance with the standard OSM tile policy. A GPS fix can work offline but depends on device and permissions.
-
-## Next gate
-
-Test the signed Android release on the user's phone, including camera/GPS and offline reopening. The deployed provider, image storage, and identification pipeline have passed live checks. Android version 2.3.0 implements native screens, camera, storage and background uploads; see `docs/ANDROID.md`. The Android project now targets `com.field.logger`; see [docs/ANDROID.md](docs/ANDROID.md) for release signing, rebuild and Play Console instructions.
-
-## Native Android app
-
-The Android source in `android/` now builds My Trail Log 2.3.0 as a native app. It uses CameraX, app-private SQLite/photo storage and WorkManager rather than launching Chrome. It connects to the existing account and identification APIs; the web application remains separately implemented. See [native release and migration instructions](docs/ANDROID.md).
-
-Community sharing, default service access and moderation are documented in [docs/COMMUNITY.md](docs/COMMUNITY.md), including the shared GPT-6.1 Sol service and verified privacy controls.
-
-Native 2.3.0 adds permanent woodland achievement layers, editable illustrated avatars, organised member settings, reviewed contact matching, periodic follower notifications, postcode/tree/map-area filters, one-off bulk sharing and weather/time-of-day woodland treatments. See docs/COMMUNITY.md for privacy rules and background timing.
+See [Android build/upgrade guidance](docs/ANDROID.md), [community rules and service](docs/COMMUNITY.md), [avatar/export implementation](docs/AVATARS-AND-EXPORTS.md), [Play upload instructions](docs/STORE-UPLOAD-GUIDE.md) and [Data safety worksheet](docs/STORE-DATA-SAFETY.md). Test the signed update on the Pixel through the existing Play testing track before production rollout.

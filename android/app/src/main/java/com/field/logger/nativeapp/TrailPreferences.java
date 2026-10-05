@@ -20,7 +20,8 @@ public final class TrailPreferences {
     of(c, owner)
         .edit()
         .putString("avatar", value.toString())
-        .putBoolean("avatarPending", true)
+        // The avatar generation endpoint has already activated a generated cartoon server-side.
+        .putBoolean("avatarPending", !"generated".equals(value.optString("kind")))
         .apply();
   }
 }

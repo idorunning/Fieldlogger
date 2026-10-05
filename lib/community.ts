@@ -1,8 +1,11 @@
 import { z } from 'zod';
-import {bindings,database,json,digest,randomToken} from './server';
+import {bindings,database,json,digest,randomToken,hex} from './server';
 import { getServiceKey } from './account-key';
 import {checkPublication} from './publishing-check';
 import {canReadPublication,distanceKm,stripJpegMetadata,publicSnapshot} from './social-policy';
+import {illustratedAvatarSchema as avatarSchema,readAvatarDescriptor,generatedAvatar} from './avatar-policy';
+import {publicAvatarImage} from './avatar-server';
+import {accessFor} from './admin';
 
 type Viewer={id:string;email:string;name:string};
 type Row={observation_id:string;owner_id:string;status:string;audience:string;snapshot:string;photo_key:string|null;generation:string;centre_lat:number|null;centre_lon:number|null;radius_km:number|null;reason:string;username:string;liked:number;saved:number;following:number;blocked:number;invited:number;acorns:number;updated_at:string;[key:string]:unknown};
@@ -11,9 +14,19 @@ export async function limitAction(key:string,maximum:number,ms:number) {
   const row=await database().prepare('INSERT INTO auth_attempts(key,count,reset_at) VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET count=CASE WHEN reset_at<=? THEN 1 ELSE count+1 END,reset_at=CASE WHEN reset_at<=? THEN excluded.reset_at ELSE reset_at END WHERE reset_at<=? OR count<? RETURNING count').bind(key,now+ms,now,now,now,maximum).first();
   return !!row;
 }
+export async function actionLease(key:string,ms:number){
+  const now=Date.now();return database().prepare('INSERT INTO auth_attempts(key,count,reset_at) VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET reset_at=excluded.reset_at WHERE reset_at<=? RETURNING reset_at').bind(key,now+ms,now).first<{reset_at:number}>();
+}
 const uuid=z.string().uuid();
-const avatarSchema=z.object({skin:z.number().int().min(0).max(7).default(0),hair:z.number().int().min(0).max(7).default(0),cut:z.number().int().min(0).max(11).default(0),eyes:z.number().int().min(0).max(4).default(0),expression:z.number().int().min(0).max(5).default(0),glasses:z.number().int().min(0).max(3).default(0),presentation:z.number().int().min(0).max(2).default(0),pose:z.number().int().min(0).max(2).default(0),outfit:z.number().int().min(0).max(7).default(0)}).strict();
-function avatar(value:unknown){try{return avatarSchema.parse(JSON.parse(String(value||'{}')));}catch{return avatarSchema.parse({});}}
+function avatar(value:unknown,ownerId:string,own=false){return readAvatarDescriptor(value,ownerId,own);}
+function acceptAvatar(input:unknown,current:string){
+  if(typeof input==='object'&&input!==null&&(input as any).kind==='generated'){
+    const descriptor=z.object({kind:z.literal('generated'),revision:z.string().uuid(),imageUrl:z.string().max(180).optional()}).strict().parse(input),stored=generatedAvatar(current);
+    if(!stored||stored.revision!==descriptor.revision)throw new z.ZodError([{code:'custom',path:['avatar'],message:'Avatar is not owned by this account.'}]);
+    return stored;
+  }
+  return avatarSchema.parse(input);
+}
 function categoryMatches(s:any,category:string){return category==='trees'? /\b(oak|beech|pine|birch|willow|ash|holly|hazel|sycamore|yew|rowan|chestnut|maple|alder|tree|cedar|elm|spruce|fir|larch)\b/i.test(String(s.name)+' '+String(s.scientificName)):s.category===category;}
 
 const centre=(u:URL)=>{
@@ -42,7 +55,7 @@ async function row(id:string,viewer:Viewer) {
 function readable(p:Row,viewer:Viewer,url:URL){return canReadPublication(p,viewer.id,{blocked:!!p.blocked,invited:!!p.invited,...centre(url)});}
 function photoDTO(p:Row,viewer:Viewer,url:URL) {
   const at=centre(url),params=at.lat===null?'':`?lat=${at.lat}&lon=${at.lon}`;
-  return {id:p.observation_id,author:{id:p.owner_id,username:p.username,avatar:avatar(p.avatar)},publishedAt:p.updated_at,...JSON.parse(p.snapshot),acorns:Number(p.acorns),acorned:!!p.liked,checkLater:!!p.saved,following:!!p.following,audience:p.audience,own:p.owner_id===viewer.id,photoUrl:`/api/social/photos/${p.observation_id}/photo${params}`};
+  return {id:p.observation_id,author:{id:p.owner_id,username:p.username,avatar:avatar(p.avatar,p.owner_id,p.owner_id===viewer.id)},publishedAt:p.updated_at,...JSON.parse(p.snapshot),acorns:Number(p.acorns),acorned:!!p.liked,checkLater:!!p.saved,following:!!p.following,audience:p.audience,own:p.owner_id===viewer.id,photoUrl:`/api/social/photos/${p.observation_id}/photo${params}`};
 }
 export async function decorateOwnRecords(userId:string) {
   const rows=await database().prepare(`SELECT o.data,o.id,p.status,p.audience,p.reason,
@@ -69,6 +82,10 @@ export async function removePublicFiles(userId:string) {
 }
 const publicationInput=z.object({audience:z.enum(['everyone','local','people']),emails:z.array(z.string().trim().email().max(254).transform(s=>s.toLowerCase())).max(30).default([]),latitude:z.number().min(-90).max(90).nullable().optional(),longitude:z.number().min(-180).max(180).nullable().optional(),radiusKm:z.number().min(.5).max(100).optional(),bulkEpoch:z.number().int().nonnegative().optional(),revision:z.number().int().positive(),agree:z.literal(true)});
 async function publish(request:Request,id:string,viewer:Viewer) {
+  const lease=await actionLease('publish-photo:'+id,180000);if(!lease)return json({error:'This photo is already being checked. Please wait.'},429);
+  try{return await publishLocked(request,id,viewer);}finally{await database().prepare('DELETE FROM auth_attempts WHERE key=? AND reset_at=?').bind('publish-photo:'+id,lease.reset_at).run();}
+}
+async function publishLocked(request:Request,id:string,viewer:Viewer) {
   const input=publicationInput.parse(await request.json());
   if(input.bulkEpoch!==undefined){const epoch=await database().prepare('SELECT reset_at FROM auth_attempts WHERE key=?').bind('bulk-generation:'+viewer.id).first<{reset_at:number}>();if(input.bulkEpoch!==(epoch?.reset_at||0))return json({error:'Bulk publishing was cancelled.'},409);}
   if(!await limitAction('publish:'+viewer.id,10,60000))return json({error:'Please wait a minute before publishing more photos.'},429);
@@ -88,7 +105,10 @@ async function publish(request:Request,id:string,viewer:Viewer) {
   const bytes=stripJpegMetadata(new Uint8Array(await object.arrayBuffer())),snapshot=publicSnapshot(data),generation=randomToken(),when=new Date().toISOString();
   await database().prepare(`INSERT INTO publications(observation_id,owner_id,status,audience,snapshot,photo_key,generation,centre_lat,centre_lon,radius_km,reason,created_at,updated_at) VALUES(?,?,'checking',?,?,NULL,?,?,?,?,'',?,?) ON CONFLICT(observation_id) DO UPDATE SET status='checking',audience=excluded.audience,snapshot=excluded.snapshot,generation=excluded.generation,centre_lat=excluded.centre_lat,centre_lon=excluded.centre_lon,radius_km=excluded.radius_km,reason='',updated_at=excluded.updated_at`).bind(id,viewer.id,input.audience,JSON.stringify(snapshot),generation,input.latitude??null,input.longitude??null,input.radiusKm??null,when,when).run();
   try {
-    const decision=await checkPublication(bytes,snapshot,key);
+    const hash=await digest('publication-v2:'+hex(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes.slice().buffer as ArrayBuffer)))+JSON.stringify(snapshot));
+    const checked=await database().prepare('SELECT decision FROM publication_checks WHERE observation_id=? AND content_hash=?').bind(id,hash).first<{decision:string}>();
+    const decision=checked?JSON.parse(checked.decision):await checkPublication(bytes,snapshot,key,viewer.id,id);
+    if(!checked)await database().prepare('INSERT INTO publication_checks(observation_id,content_hash,decision,checked_at) VALUES(?,?,?,?) ON CONFLICT(observation_id) DO UPDATE SET content_hash=excluded.content_hash,decision=excluded.decision,checked_at=excluded.checked_at').bind(id,hash,JSON.stringify(decision),new Date().toISOString()).run();
     if(!decision.allowed){await database().prepare("UPDATE publications SET status='blocked',reason=?,updated_at=? WHERE observation_id=? AND generation=? AND status='checking'").bind(decision.reason,new Date().toISOString(),id,generation).run();return json({published:false,status:'blocked',reason:decision.reason});}
     const publicKey=`published/${viewer.id}/${id}/${generation}.jpg`;
     await bindings().BUCKET.put(publicKey,bytes,{httpMetadata:{contentType:'image/jpeg'}});
@@ -98,7 +118,7 @@ async function publish(request:Request,id:string,viewer:Viewer) {
       const token=randomToken();invitations.push({email,url:new URL('/invite?token='+token,request.url).toString()});
       writes.push(database().prepare('INSERT INTO publication_recipients(id,observation_id,generation,email,token_hash) VALUES(?,?,?,?,?)').bind(crypto.randomUUID(),id,generation,email,await digest(token)));
     }
-    writes.push(database().prepare("UPDATE publications SET status='published',photo_key=?,updated_at=? WHERE observation_id=? AND generation=? AND status='checking' AND (? IS NULL OR COALESCE((SELECT reset_at FROM auth_attempts WHERE key=?),0)=?)").bind(publicKey,new Date().toISOString(),id,generation,input.bulkEpoch??null,'bulk-generation:'+viewer.id,input.bulkEpoch??null));
+    writes.push(database().prepare("UPDATE publications SET status='published',photo_key=?,updated_at=? WHERE observation_id=? AND generation=? AND status='checking' AND (? IS NULL OR COALESCE((SELECT reset_at FROM auth_attempts WHERE key=?),0)=?) AND COALESCE((SELECT status FROM member_access WHERE user_id=?),'active')='active'").bind(publicKey,new Date().toISOString(),id,generation,input.bulkEpoch??null,'bulk-generation:'+viewer.id,input.bulkEpoch??null,viewer.id));
     const results=await database().batch(writes);
     if(!results.at(-1)?.meta.changes){await bindings().BUCKET.delete(publicKey);return json({error:'Publishing was cancelled. This photo is private.'},409);}
     if(old?.photo_key&&old.photo_key!==publicKey)await bindings().BUCKET.delete(old.photo_key);
@@ -113,15 +133,15 @@ export async function community(request:Request,path:string[],viewer:Viewer):Pro
   if(method!=='GET'&&request.headers.get('origin')!==url.origin)return json({error:'Open My Trail Log to make this change.'},403);
   const me=await profile(viewer.id);
   if(part==='me'){
-    if(method==='GET')return json({bulkEpoch:(await database().prepare('SELECT reset_at FROM auth_attempts WHERE key=?').bind('bulk-generation:'+viewer.id).first<{reset_at:number}>())?.reset_at||0,profile:{id:viewer.id,username:me.username,avatar:avatar(me.avatar),discoverable:!!me.discoverable,termsAccepted:!!me.terms_at,isModerator:viewer.id===bindings().COMMUNITY_ADMIN_USER_ID}});
+    if(method==='GET')return json({bulkEpoch:(await database().prepare('SELECT reset_at FROM auth_attempts WHERE key=?').bind('bulk-generation:'+viewer.id).first<{reset_at:number}>())?.reset_at||0,profile:{id:viewer.id,username:me.username,avatar:avatar(me.avatar,viewer.id,true),discoverable:!!me.discoverable,termsAccepted:!!me.terms_at,isModerator:(await accessFor(viewer)).role==='admin'}});
     if(method==='PUT'){
-      const input=z.object({username:z.string().trim().regex(/^[a-zA-Z][a-zA-Z0-9_]{2,24}$/).transform(s=>s.toLowerCase()),discoverable:z.boolean(),avatar:avatarSchema.optional()}).parse(await request.json());
+      const input=z.object({username:z.string().trim().regex(/^[a-zA-Z][a-zA-Z0-9_]{2,24}$/).transform(s=>s.toLowerCase()),discoverable:z.boolean(),avatar:z.unknown().optional()}).parse(await request.json());
       const taken=await database().prepare('SELECT user_id FROM profiles WHERE username=? AND user_id<>?').bind(input.username,viewer.id).first();if(taken)return json({error:'That username is taken. Try another.'},409);
-      await database().prepare('UPDATE profiles SET username=?,discoverable=?,avatar=? WHERE user_id=?').bind(input.username,input.discoverable?1:0,JSON.stringify(input.avatar||avatar(me.avatar)),viewer.id).run();return json({ok:true});
+      await database().prepare('UPDATE profiles SET username=?,discoverable=?,avatar=? WHERE user_id=?').bind(input.username,input.discoverable?1:0,input.avatar===undefined?me.avatar:JSON.stringify(acceptAvatar(input.avatar,me.avatar)),viewer.id).run();return json({ok:true});
     }
   }
   if(part==='avatar'&&method==='PUT'){
-    const input=avatarSchema.parse(await request.json());await database().prepare('UPDATE profiles SET avatar=? WHERE user_id=?').bind(JSON.stringify(input),viewer.id).run();return json({avatar:input});
+    const input=acceptAvatar(await request.json(),me.avatar);await database().prepare('UPDATE profiles SET avatar=? WHERE user_id=?').bind(JSON.stringify(input),viewer.id).run();return json({avatar:avatar(JSON.stringify(input),viewer.id,true)});
   }
   if(part==='achievements'){
     if(method==='PUT'){
@@ -145,12 +165,13 @@ export async function community(request:Request,path:string[],viewer:Viewer):Pro
     for(const email of [...new Set(input.emails)]){
       const person=await database().prepare(`SELECT pr.user_id AS id,pr.username,pr.avatar,EXISTS(SELECT 1 FROM follows f WHERE f.follower_id=? AND f.following_id=pr.user_id) AS following FROM profiles pr JOIN users u ON u.id=pr.user_id WHERE u.email=? AND pr.discoverable=1 AND pr.user_id<>? AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id=? AND b.blocked_id=pr.user_id) OR (b.blocked_id=? AND b.blocker_id=pr.user_id))`).bind(viewer.id,email,viewer.id,viewer.id,viewer.id).first();if(person)found.push(person);
     }
-    return json({users:found});
+    return json({users:found.map((person:any)=>({...person,avatar:avatar(person.avatar,person.id)}))});
   }
   if(part==='users'){
+    if(id&&path[2]==='avatar'&&path[3]==='image')return publicAvatarImage(request,id,viewer);
     if(!id&&method==='GET'){
       const query=(url.searchParams.get('query')||'').trim().toLowerCase().slice(0,25),following=url.searchParams.get('following')==='true';
-      const list=await database().prepare(`SELECT pr.user_id AS id,pr.username,pr.avatar,EXISTS(SELECT 1 FROM follows f WHERE f.follower_id=? AND f.following_id=pr.user_id) AS following FROM profiles pr WHERE pr.user_id<>? AND instr(pr.username,?)>0 AND (?=0 OR EXISTS(SELECT 1 FROM follows f WHERE f.follower_id=? AND f.following_id=pr.user_id)) AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id=? AND b.blocked_id=pr.user_id) OR (b.blocked_id=? AND b.blocker_id=pr.user_id)) ORDER BY pr.username LIMIT 60`).bind(viewer.id,viewer.id,query,following?1:0,viewer.id,viewer.id,viewer.id).all();return json({users:list.results});
+      const list=await database().prepare(`SELECT pr.user_id AS id,pr.username,pr.avatar,EXISTS(SELECT 1 FROM follows f WHERE f.follower_id=? AND f.following_id=pr.user_id) AS following FROM profiles pr WHERE pr.user_id<>? AND instr(pr.username,?)>0 AND (?=0 OR EXISTS(SELECT 1 FROM follows f WHERE f.follower_id=? AND f.following_id=pr.user_id)) AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id=? AND b.blocked_id=pr.user_id) OR (b.blocked_id=? AND b.blocker_id=pr.user_id)) ORDER BY pr.username LIMIT 60`).bind(viewer.id,viewer.id,query,following?1:0,viewer.id,viewer.id,viewer.id).all();return json({users:list.results.map((person:any)=>({...person,avatar:avatar(person.avatar,person.id)}))});
     }
     if(!uuid.safeParse(id).success)return json({error:'User unavailable.'},404);
     const target=await database().prepare('SELECT user_id AS id,username,avatar FROM profiles WHERE user_id=?').bind(id).first();if(!target)return json({error:'User unavailable.'},404);
@@ -164,7 +185,7 @@ export async function community(request:Request,path:string[],viewer:Viewer):Pro
       if(input.blocked)await database().batch([database().prepare('INSERT OR IGNORE INTO blocks(blocker_id,blocked_id) VALUES(?,?)').bind(viewer.id,id),database().prepare('DELETE FROM follows WHERE (follower_id=? AND following_id=?) OR (follower_id=? AND following_id=?)').bind(viewer.id,id,id,viewer.id)]);
       else await database().prepare('DELETE FROM blocks WHERE blocker_id=? AND blocked_id=?').bind(viewer.id,id).run();return json({blocked:input.blocked});
     }
-    if(method==='GET')return json({user:target});
+    if(method==='GET')return json({user:{...target,avatar:avatar((target as any).avatar,id,id===viewer.id)}});
   }
   if(part==='blocked'&&method==='GET')return json({users:(await database().prepare('SELECT p.user_id AS id,p.username FROM blocks b JOIN profiles p ON p.user_id=b.blocked_id WHERE b.blocker_id=?').bind(viewer.id).all()).results});
   if(part==='invite'&&method==='POST'){
@@ -239,7 +260,7 @@ export async function community(request:Request,path:string[],viewer:Viewer):Pro
   return json({error:'Not found'},404);
 }
 async function moderation(request:Request,path:string[],viewer:Viewer){
-  if(viewer.id!==bindings().COMMUNITY_ADMIN_USER_ID)return json({error:'Not found'},404);
+  const access=await accessFor(viewer);if(access.role!=='admin'||access.status!=='active')return json({error:'Not found'},404);
   const id=path[1];
   if(!id&&request.method==='GET')return json({reports:(await database().prepare("SELECT r.id,r.observation_id,r.reason,r.detail,r.created_at,pr.username,p.snapshot FROM reports r JOIN publications p ON p.observation_id=r.observation_id JOIN profiles pr ON pr.user_id=p.owner_id WHERE r.status='open' AND p.status='reported' ORDER BY r.created_at DESC LIMIT 100").all()).results});
   if(!uuid.safeParse(id).success)return json({error:'Not found'},404);
@@ -254,7 +275,7 @@ async function moderation(request:Request,path:string[],viewer:Viewer){
   if(input.action==='review'){
     const key=await getServiceKey(viewer.id);const object=p.photo_key?await bindings().BUCKET.get(p.photo_key):null;
     if(!key||!object)return json({error:'Review service unavailable. The photo stays hidden.'},503);
-    const decision=await checkPublication(new Uint8Array(await object.arrayBuffer()),JSON.parse(p.snapshot),key);
+    const decision=await checkPublication(new Uint8Array(await object.arrayBuffer()),JSON.parse(p.snapshot),key,viewer.id,id);
     status=decision.allowed?'published':'removed';reason=decision.reason;
   }
   await database().batch([database().prepare("UPDATE publications SET status=?,reason=?,updated_at=? WHERE observation_id=? AND generation=? AND status='reported'").bind(status,reason,new Date().toISOString(),id,p.generation),database().prepare("UPDATE reports SET status='reviewed' WHERE observation_id=? AND status='open'").bind(id)]);

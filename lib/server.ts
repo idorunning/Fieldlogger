@@ -7,6 +7,14 @@ export type Bindings = {
   OPENAI_API_KEY?: string;
   SHARED_OPENAI_KEY_OWNER_ID?: string;
   COMMUNITY_ADMIN_USER_ID?: string;
+  GOOGLE_PLAY_SERVICE_ACCOUNT?: string;
+  GOOGLE_PLAY_BILLING_ENABLED?: string;
+  GOOGLE_PLAY_PACKAGE?: string;
+  OPENAI_AVATAR_MODEL?: string;
+  OPENAI_ECONOMY_MODEL?: string;
+  TRAIL_TRADER_ADDRESS?: string;
+  TRAIL_COMPANY_NUMBER?: string;
+  TRAIL_BILLING_LAUNCH_READY?: string;
   PLANTNET_API_KEY?: string;
   BIOCLIP_URL?: string;
   BIOCLIP_TOKEN?: string;
@@ -87,7 +95,7 @@ export async function getUser(request: Request) {
   if (!token || !/^[a-f0-9]{64}$/.test(token)) return null;
   return await database()
     .prepare(
-      "SELECT users.id,users.email,users.name FROM sessions JOIN users ON users.id=sessions.user_id WHERE sessions.hash=? AND sessions.expires_at>?",
+      "SELECT users.id,users.email,users.name,COALESCE(a.status,'active') AS status FROM sessions JOIN users ON users.id=sessions.user_id LEFT JOIN member_access a ON a.user_id=users.id WHERE sessions.hash=? AND sessions.expires_at>?",
     )
     .bind(await digest(token), Date.now())
     .first<{ id: string; email: string; name: string }>();

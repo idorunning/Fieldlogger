@@ -39,16 +39,19 @@ public final class CommunityActivity extends AppCompatActivity {
       MUTED = 0xff68796f,
       GOLD = 0xfff0dc7a;
   private Repository repo;
+  private AvatarPhotoController avatarStudio;
   private FrameLayout root, body, mapFrame;
   private LinearLayout shell, nav, preview;
   private MapView map;
   private String mode = "map", scope = "own", category = "all", author = "", photoId = "";
-  private boolean topAcorns = false, expanded = false, hotAreas = false;
+  private boolean topAcorns = false, expanded = false, hotAreas = false, mapHasMore = false;
   private String photoQuery = "";
   private ActivityResultLauncher<String> contactsPermission;
   private LinearLayout contactResults;
   private TextView bulkStatus;
   private double latitude = 54, longitude = -2, radius = 10;
+  private double mapZoom = -1;
+  private final Runnable refreshClusters = () -> renderMarkers();
   private int epoch = 0, mapRequest = 0;
   private final List<JSONObject> visible = new ArrayList<>();
   private final List<CustomTarget<Bitmap>> targets = new ArrayList<>();
@@ -71,6 +74,7 @@ public final class CommunityActivity extends AppCompatActivity {
   public void onCreate(Bundle saved) {
     super.onCreate(saved);
     repo = new Repository(this);
+    avatarStudio = new AvatarPhotoController(this);
     activeOwner = repo.owner();
     WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
     getWindow().setStatusBarColor(GREEN);
@@ -142,12 +146,14 @@ public final class CommunityActivity extends AppCompatActivity {
       }
     latitude = getPreferences(0).getFloat("lat", (float) latitude);
     longitude = getPreferences(0).getFloat("lon", (float) longitude);
+    mapZoom = getPreferences(0).getFloat("zoom", -1);
     String requested = getIntent().getStringExtra("mode");
     photoId = getIntent().getStringExtra("id");
     if (photoId == null) photoId = "";
     if (saved != null) {
       latitude = saved.getDouble("lat", latitude);
       longitude = saved.getDouble("lon", longitude);
+      mapZoom = saved.getDouble("zoom", mapZoom);
       scope = saved.getString("scope", "own");
       radius = saved.getDouble("radius", 10);
       topAcorns = saved.getBoolean("top");
@@ -184,6 +190,7 @@ public final class CommunityActivity extends AppCompatActivity {
   protected void onResume() {
     super.onResume();
     if (map != null) map.onResume();
+    if (repo != null && repo.session.get() != null) BillingManager.restore(this);
     if (repo != null && !repo.owner().equals(activeOwner)) {
       activeOwner = repo.owner();
       visible.clear();
@@ -208,6 +215,7 @@ public final class CommunityActivity extends AppCompatActivity {
   @Override
   protected void onSaveInstanceState(Bundle out) {
     rememberCentre();
+    out.putDouble("zoom", mapZoom);
     out.putDouble("lat", latitude);
     out.putDouble("lon", longitude);
     out.putString("scope", scope);
@@ -303,10 +311,12 @@ public final class CommunityActivity extends AppCompatActivity {
     if (map != null) {
       latitude = map.getMapCenter().getLatitude();
       longitude = map.getMapCenter().getLongitude();
+      mapZoom = map.getZoomLevelDouble();
       getPreferences(0)
           .edit()
           .putFloat("lat", (float) latitude)
           .putFloat("lon", (float) longitude)
+          .putFloat("zoom", (float) mapZoom)
           .apply();
     }
   }
@@ -315,6 +325,7 @@ public final class CommunityActivity extends AppCompatActivity {
     for (CustomTarget<Bitmap> t : targets) Glide.with(getApplicationContext()).clear(t);
     targets.clear();
     if (map != null) {
+      map.removeCallbacks(refreshClusters);
       map.onPause();
       map.onDetach();
       map = null;
@@ -543,8 +554,25 @@ public final class CommunityActivity extends AppCompatActivity {
     map.setMultiTouchControls(true);
     map.setBuiltInZoomControls(false);
     mapFrame.addView(map, new FrameLayout.LayoutParams(-1, -1));
-    map.getController().setZoom(latitude == 54 && longitude == -2 ? 6d : 13d);
+    map.getController()
+        .setZoom(mapZoom > 0 ? mapZoom : latitude == 54 && longitude == -2 ? 6d : 13d);
     map.getController().setCenter(new GeoPoint(latitude, longitude));
+    map.addMapListener(
+        new MapListener() {
+          @Override
+          public boolean onScroll(ScrollEvent event) {
+            return false;
+          }
+
+          @Override
+          public boolean onZoom(ZoomEvent event) {
+            if (map != null) {
+              map.removeCallbacks(refreshClusters);
+              map.postDelayed(refreshClusters, 160);
+            }
+            return false;
+          }
+        });
     LinearLayout controls = column();
     controls.setPadding(dp(10), dp(8), dp(10), dp(8));
     controls.setBackground(shape(0xfafffdf7, 24));
@@ -635,6 +663,7 @@ public final class CommunityActivity extends AppCompatActivity {
 
   private void loadMap() {
     final int request = ++mapRequest;
+    mapHasMore = false;
     preview.removeAllViews();
     visible.clear();
     if (scope.equals("own") || scope.equals("saved")) {
@@ -678,8 +707,8 @@ public final class CommunityActivity extends AppCompatActivity {
             JSONObject p = photos.getJSONObject(i);
             if (!ids.contains(p.optString("id"))) visible.add(p);
           }
+          mapHasMore = result.optBoolean("hasMore");
           renderMarkers();
-          if (result.optBoolean("hasMore")) mapStatus.append(" · first 100 — narrow filters");
         });
   }
 
@@ -689,36 +718,46 @@ public final class CommunityActivity extends AppCompatActivity {
     for (CustomTarget<Bitmap> t : targets) Glide.with(this).clear(t);
     targets.clear();
     if (topAcorns) visible.sort((a, b) -> Integer.compare(b.optInt("acorns"), a.optInt("acorns")));
-    Map<String, List<JSONObject>> groups = new LinkedHashMap<>();
     int noGps = 0;
     for (JSONObject p : visible) {
       if (!Observation.coords(p.opt("latitude"), p.opt("longitude"))) {
         noGps++;
         continue;
       }
-      String key =
-          String.format(
-              Locale.US,
-              hotAreas ? "%.2f,%.2f" : "%.5f,%.5f",
-              p.optDouble("latitude"),
-              p.optDouble("longitude"));
-      groups.computeIfAbsent(key, k -> new ArrayList<>()).add(p);
     }
-    List<List<JSONObject>> ordered = new ArrayList<>(groups.values());
+    List<MapClusters.Cluster> ordered =
+        MapClusters.group(visible, map.getZoomLevelDouble(), dp(76), dp(256));
     Collections.reverse(ordered);
-    if (hotAreas) ordered.sort((a, b) -> Integer.compare(a.size(), b.size()));
+    if (hotAreas) ordered.sort((a, b) -> Integer.compare(a.photos.size(), b.photos.size()));
+    else if (topAcorns)
+      ordered.sort(
+          (a, b) ->
+              Integer.compare(
+                  a.representative.optInt("acorns"), b.representative.optInt("acorns")));
     final MapView current = map;
-    for (List<JSONObject> group : ordered) {
-      JSONObject p = group.get(0);
+    for (MapClusters.Cluster cluster : ordered) {
+      List<JSONObject> group = cluster.photos;
+      JSONObject p = cluster.representative;
       Marker marker = new Marker(map);
-      marker.setPosition(new GeoPoint(p.optDouble("latitude"), p.optDouble("longitude")));
+      marker.setPosition(new GeoPoint(cluster.latitude, cluster.longitude));
       marker.setAnchor(.5f, .5f);
-      marker.setTitle(p.optString("name", "Discovery"));
-      marker.setIcon(markerImage(null, p, group.size()));
+      marker.setTitle(
+          group.size() > 1
+              ? group.size() + " discoveries · tap to explore"
+              : p.optString("name", "Discovery"));
+      marker.setIcon(markerImage(null, p, group.size(), cluster.category));
       marker.setOnMarkerClickListener(
           (m, v) -> {
             if (group.size() == 1) showPreview(p);
-            else {
+            else if (!MapClusters.sameSpot(group)
+                && map.getZoomLevelDouble() < map.getMaxZoomLevel() - .1) {
+              preview.removeAllViews();
+              map.getController().setCenter(new GeoPoint(cluster.latitude, cluster.longitude));
+              map.getController()
+                  .setZoom(Math.min(map.getMaxZoomLevel(), map.getZoomLevelDouble() + 2));
+              map.removeCallbacks(refreshClusters);
+              map.postDelayed(refreshClusters, 160);
+            } else {
               String[] choices = new String[group.size()];
               for (int i = 0; i < choices.length; i++)
                 choices[i] =
@@ -739,7 +778,7 @@ public final class CommunityActivity extends AppCompatActivity {
             new CustomTarget<Bitmap>(dp(64), dp(64)) {
               public void onResourceReady(Bitmap b, Transition<? super Bitmap> t) {
                 if (map == current) {
-                  marker.setIcon(markerImage(b, p, group.size()));
+                  marker.setIcon(markerImage(b, p, group.size(), cluster.category));
                   map.invalidate();
                 }
               }
@@ -762,11 +801,12 @@ public final class CommunityActivity extends AppCompatActivity {
         visible.size()
             + " discoveries"
             + (hotAreas
-                ? " · " + groups.size() + " photographed areas"
+                ? " · " + ordered.size() + " photographed clusters"
                 : topAcorns ? " · most acorns first" : "")
             + (!photoQuery.isBlank() ? " · " + photoQuery : "")
             + (noGps > 0 ? " · " + noGps + " without GPS" : "")
-            + " · View list");
+            + (mapHasMore ? " · first 100 — narrow filters" : "")
+            + " · Zoom to explore · View list");
     mapStatus.setOnClickListener(v -> showMapList());
     if (visible.isEmpty()) {
       TextView empty =
@@ -780,7 +820,7 @@ public final class CommunityActivity extends AppCompatActivity {
     }
   }
 
-  private Drawable markerImage(Bitmap photo, JSONObject p, int group) {
+  private Drawable markerImage(Bitmap photo, JSONObject p, int group, String categoryColor) {
     int size = dp(70);
     Bitmap b = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
     Canvas c = new Canvas(b);
@@ -790,7 +830,7 @@ public final class CommunityActivity extends AppCompatActivity {
     c.drawCircle(mid, mid + dp(2), dp(32), paint);
     paint.setColor(PAPER);
     c.drawCircle(mid, mid, dp(31), paint);
-    paint.setColor(Observation.color(p.optString("category")));
+    paint.setColor(Observation.color(categoryColor));
     c.drawCircle(mid, mid, dp(28), paint);
     if (photo != null) {
       int save = c.save();
@@ -804,7 +844,7 @@ public final class CommunityActivity extends AppCompatActivity {
       paint.setColor(GOLD);
       c.drawCircle(mid, mid, dp(17), paint);
     }
-    String badge = group > 1 ? "+" + group : Integer.toString(p.optInt("acorns"));
+    String badge = group > 1 ? Integer.toString(group) : Integer.toString(p.optInt("acorns"));
     paint.setColor(GREEN);
     c.drawRoundRect(dp(35), dp(47), dp(69), dp(68), dp(10), dp(10), paint);
     paint.setColor(PAPER);
@@ -823,11 +863,16 @@ public final class CommunityActivity extends AppCompatActivity {
     acorns.setChecked(topAcorns);
     panel.addView(acorns);
     CheckBox areas = new CheckBox(this);
-    areas.setText("Most photographed areas (about 1 km cells)");
+    areas.setText("Most photographed clusters");
     areas.setChecked(hotAreas);
     panel.addView(areas);
     panel.addView(
-        text("Counts use the photos visible to you in this result set.", 12, MUTED, false));
+        text(
+            "Clusters merge and split as you zoom. Counts use the photos visible to you in this"
+                + " result set.",
+            12,
+            MUTED,
+            false));
     Spinner types = new Spinner(this);
     String[] choices = new String[Observation.CATEGORIES.length + 2];
     choices[0] = "all";
@@ -1471,17 +1516,16 @@ public final class CommunityActivity extends AppCompatActivity {
     JSONObject[] selectedAvatar = {TrailPreferences.avatar(this, repo.owner())};
     content.addView(
         button(
-            "Personalise my avatar",
+            "Make my avatar",
             false,
             () ->
-                AvatarPicker.show(
-                    this,
+                avatarStudio.show(
                     selectedAvatar[0],
                     a -> {
                       selectedAvatar[0] = a;
                       portrait.update(a);
                       TrailPreferences.avatar(this, repo.owner(), a);
-                      repo.enqueue();
+                      if (!"generated".equals(a.optString("kind"))) repo.enqueue();
                     })));
     gap(content, 14);
     EditText username = input("Username");
@@ -2404,7 +2448,8 @@ public final class CommunityActivity extends AppCompatActivity {
                   + j.optInt("blocked")
                   + " blocked · "
                   + j.optInt("skipped")
-                  + " skipped");
+                  + " skipped"
+                  + (j.optString("message").isEmpty() ? "" : "\n" + j.optString("message")));
     } catch (Exception e) {
       bulkStatus.setText("No batch in progress");
     }

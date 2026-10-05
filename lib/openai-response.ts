@@ -11,21 +11,21 @@ export function checkOpenAIResponse(response: Response) {
   if (response.ok) return;
   if (response.status === 401)
     throw new OpenAIConnectionError(
-      "Your OpenAI key has expired, been revoked, or is invalid. Replace it in API key settings. Your photos are saved.",
+      "Photo identification is temporarily unavailable. Your photos are saved. Please try later.",
       422,
     );
   if (response.status === 403)
     throw new OpenAIConnectionError(
-      "This key cannot access the selected OpenAI model. Check its project permissions or replace it in API key settings.",
+      "Photo identification is temporarily unavailable. Your photos are saved. Please try later.",
       422,
     );
   if (response.status === 429)
     throw new OpenAIConnectionError(
-      "OpenAI's usage limit or billing quota has been reached. Check your OpenAI project or try again later. Your photos are saved.",
+      "Photo analysis is busy or temporarily paused. Your photos are saved. Please try again later.",
       429,
     );
   throw new OpenAIConnectionError(
-    "OpenAI could not complete the request. Try again shortly. Your photos are saved.",
+    "Photo analysis could not complete the request. Try again shortly. Your photos are saved.",
   );
 }
 

@@ -1,44 +1,60 @@
-# My Trail Log — Google Play asset pack
+# My Trail Log 2.4.0 — Play upload pack
 
-Update the existing Play application. Keep **com.field.logger** and the existing Play app signing configuration. Upload **my-trail-log-2.3.0-play.aab**, version code **10**; it uses the original upload key. This pack has not been submitted to Google Play.
+Upload **my-trail-log-2.4.0-play.aab**, version code **11**, to the existing application/testing track. Package **com.field.logger**, min SDK **24**, target **36**, original upload signing key. This pack has not been submitted to Play.
 
-## Main store listing
-
-| Field | File / value |
+| Listing field | File / value |
 | --- | --- |
 | App name | `app-name.txt` — My Trail Log |
-| Short description | `short-description.txt` — within 80 characters |
-| Full description | `full-description.txt` — within 4,000 characters |
-| App icon | `app-icon-512.png` — 512 × 512 RGB PNG |
-| Feature graphic | `feature-graphic-1024x500.png` — 1,024 × 500 RGB PNG |
-| Phone screenshots | Eight PNGs in `phone-screenshots/`, each 1,080 × 1,920 |
-| Release notes | `release-notes.txt` — within 500 characters |
-| Support email | ntracey@gmail.com |
+| Short description | `short-description.txt` — ≤80 characters |
+| Full description | `full-description.txt` — ≤4,000 characters |
+| App icon | `app-icon-512.png` — 512 × 512 RGB |
+| Feature graphic | `feature-graphic-1024x500.png` — 1,024 × 500 RGB |
+| Phone screenshots | Eight current native 1,080 × 1,920 PNGs |
+| Release notes | `release-notes.txt` — ≤500 characters |
+| Support | ntracey@gmail.com |
 | Website | https://fieldlogger.co.uk |
-| Privacy policy | https://fieldlogger.co.uk/privacy |
-| Account deletion URL | https://fieldlogger.co.uk/delete-account |
-| Suggested category | Lifestyle |
+| Privacy | https://fieldlogger.co.uk/privacy |
+| Account deletion | https://fieldlogger.co.uk/delete-account |
 
-The journal screenshots now show the dated scrapbook design. Suggested screenshot order: **01 journal**, **06 wildlife**, **05 notes/sharing**, **02 discovery photo**, **03 collection**, **04 milestones**, **08 map discoveries**, **09 member settings**. Play allows up to eight screenshots per device type and requires at least two overall. These eight images meet the 9:16 / 1,080px phone size recommendation.
+The desktop company site and native scrapbook have separate layouts, sharing the My Trail Log name and readable handwritten Kalam wordmark. Keep the current domain until a replacement is connected, HTTPS verified and app/account links tested.
 
-These are renders of the actual Android view hierarchy using Robolectric's native graphics engine, with licensed example photos and clearly labelled example journal data. They are not browser screenshots or invented app interfaces. Device status/navigation bars are excluded. A physical Pixel capture can replace them later; rendering these screenshots does not verify the phone's camera, GPS or background execution. The images do not contain your personal photos or coordinates. Bundled sample data is test-only and does not appear in the installed app.
+Screenshots are actual Android view renders using Robolectric native graphics, licensed demonstration photos and labelled sample data. They are not browser screenshots or invented UI. They do not prove physical camera/GPS/background operation. Test data does not become an installed user's journal. The raw map view with unavailable headless tiles is excluded; the map discovery list is included.
 
-Tablet, TV, Wear OS, Android Auto and XR assets are not required for this phone listing; this release does not claim dedicated experiences for those form factors. A promo video is optional and is not included.
+Play permits up to eight screenshots/device type and requires at least two overall. Tablet, TV, Wear OS, Android Auto and XR assets are unnecessary for this phone listing. No optional promo video is included.
 
-## App content
+## Content and policies
 
-Use `DATA-SAFETY.md` as a source-based worksheet and complete the Console questionnaire for this exact release. It is not an automatically submitted declaration. Use `APP-ACCESS.md` for reviewer instructions. The app has no advertising SDK or Play billing; Identification uses the owner’s shared server service; OpenAI account billing is managed by the owner outside the native app. Select a target audience and answer the content-rating questionnaire based on your intended distribution; an age rating cannot be invented from the graphics.
+Use `DATA-SAFETY.md` and `APP-ACCESS.md` for this exact release. Update answers for avatar-source AI processing, generated cartoons, optional GPS/contact matching, social content, follower alerts and Google Play purchase records. Billing is integrated: the old “no in-app purchases” answer is obsolete.
 
-## Upgrade and testing
+The service is intended for account holders **16+**. Complete Console target-audience/content-rating questions from actual features; do not invent a rating or Families claim. No advertising/tracking SDK is added.
 
-Before moving from the old web wrapper, upload pending photos or export a web journal backup. Native sign-in uses the same account. Uploaded photos download automatically; **Import web journal backup** transfers photos still only in browser storage.
+Policies: `/privacy`, `/terms`, `/cookies`, `/community-rules`, `/support`, `/delete-account`. Current operator: **Nathan Tracey**, **422 Milton Road, Waterlooville, PO8 8LD, United Kingdom**. **Thinking About Ltd is proposed and not incorporated**. Update developer/trader details truthfully; add company registration details only after incorporation.
 
-Test camera capture, permission denial, GPS/place lookup, offline reopen, reconnect upload and sharing on your Pixel using the existing Play testing track. The direct APK is upload-key signed and cannot update a Play-signed install. Use the AAB through Play.
+## Subscription activation
 
-## Editable branding
+Billing code does not create products. Checkout is gated until Console products, secure Google verification and launch checks are complete. Prices and allowances are finalised:
 
-`editable/feature-graphic.html` is the exact feature graphic source; serve this folder with a local HTTP server to edit/export it. `brand/` includes outlined, scalable handwritten wordmarks and the favicon. `fonts/` includes Kalam Bold, DM Sans and their SIL Open Font Licenses. `photos/` includes the public demonstration photographs and attribution records. The notebook/leaf app icon is generated artwork created for this rebrand. The app name uses **Kalam Bold**; regular interface text uses readable standard type.
+| Plan | Photos / UTC month | Closer Looks / UTC month | UK price |
+| --- | ---: | ---: | --- |
+| Free | 100 | 5 | Free |
+| Plus | 150 | 30 | £5.99/month |
+| Premium | 300 | 60 | £11.99/month |
+| Premium annual | 300 | 60 | £119.99/year, plus 150 photos and 30 Closer Looks per paid year |
 
-Official references: [Store listing requirements](https://support.google.com/googleplay/android-developer/answer/9866151) · [Data safety](https://support.google.com/googleplay/android-developer/answer/10787469) · [Account deletion](https://support.google.com/googleplay/android-developer/answer/13327111).
+The annual base ceiling is 3,600 photos/720 Closer Looks per verified paid year, before bonuses. Eligible one-month trials provide the selected plan's allowances as whole-trial totals; no annual trial bonus. Follow [PLAY-SUBSCRIPTIONS-SETUP.md](PLAY-SUBSCRIPTIONS-SETUP.md) and [SUBSCRIPTION-VIABILITY.md](SUBSCRIPTION-VIABILITY.md). Localized prices and eligible offers come from Google. Registration does not grant a trial.
 
-The raw map preview is included separately for review, with map tiles unavailable in the headless renderer. It is omitted from store screenshots. GPT-6.1 Sol identification and publishing checks have passed live integration tests. See COMMUNITY.md in the source.
+Configure exact product IDs and one-month offers, then test purchases/acknowledgement, pending payment, trial end, renewal/grace/hold, cancellation, expiry, refund/revoke, restore and cross-account replay using Play licence testers. Mocked tests are not live verification. Free downloads remain available after expiry/quota exhaustion. Account deletion does not cancel Play billing.
+
+## Upgrade and device checks
+
+Use the existing Play testing track. A direct upload-signed APK cannot update a Google Play-signed installation; do not uninstall and risk pending local photos. Database/achievement IDs are preserved.
+
+On the Pixel test permissions, capture/late GPS/place names, offline reconnect, account isolation, map clustering, avatar consent, archive, story sharing and local/cloud exports before promotion. Check exports contain active/archived private data and no credentials; role changes cannot grant paid entitlement. The release report distinguishes automated, live-service and physical-device checks.
+
+For an old browser wrapper, sync/export pending browser photos first. Native sign-in downloads cloud records; **Import web journal backup** transfers device-only browser records. Android cannot read Chrome's private storage.
+
+## Editable assets
+
+`editable/feature-graphic.html` is editable; `brand/` has wordmarks/favicon; `fonts/` includes Kalam Bold/DM Sans and SIL licences; `photos/` contains licensed sample photos/credits. Never add private user photos, avatar-source portraits or signing credentials. The notebook/leaf icon remains My Trail Log's brand.
+
+Official: [Listing requirements](https://support.google.com/googleplay/android-developer/answer/9866151) · [Data safety](https://support.google.com/googleplay/android-developer/answer/10787469) · [Account deletion](https://support.google.com/googleplay/android-developer/answer/13327111) · [Subscriptions](https://support.google.com/googleplay/android-developer/answer/140504).

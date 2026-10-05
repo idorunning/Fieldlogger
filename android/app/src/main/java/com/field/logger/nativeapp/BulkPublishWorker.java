@@ -86,6 +86,26 @@ public final class BulkPublishWorker extends Worker {
             }
           } catch (Api.Failure e) {
             if (e.status == 401) return Result.failure();
+            if (e.photoLimit()) {
+              repo.db.error(record.id(), owner, e.getMessage());
+              Observation.put(job, "state", "paused");
+              Observation.put(
+                  job,
+                  "message",
+                  e.getMessage()
+                      + " Choose a plan or wait for renewal, then start publishing again.");
+              synchronized (BulkPublishWorker.class) {
+                JSONObject latest = new JSONObject(prefs.getString("bulkJob", "{}"));
+                if (latest.optString("token").equals(job.optString("token"))
+                    && latest.optString("state").equals("running"))
+                  prefs
+                      .edit()
+                      .putString("bulkJob", job.toString())
+                      .putString("photoAllowanceMessage", e.getMessage())
+                      .commit();
+              }
+              return Result.success();
+            }
             if (e.status == 429 || e.status >= 500) return Result.retry();
             outcome = "skipped";
           }

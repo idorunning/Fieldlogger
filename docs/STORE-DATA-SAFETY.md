@@ -1,57 +1,64 @@
-# Data safety worksheet — native My Trail Log 2.3.0
+# Data safety worksheet — My Trail Log 2.4.0
 
-This is implementation guidance for completing the Play questionnaire, not a submitted or legally certified declaration. It covers the native app and existing Field Logger server. Verify answers against the provider terms used for your account and any later changes.
+For package `com.field.logger`, version code **11**, minimum SDK **24**, target SDK **36**. This worksheet guides the owner's Play Console answers; it is not a submitted declaration or independent security certification. Review the actual provider contracts and SDK handling.
 
-| Data | When collected/transmitted | Purpose | Optional / retention |
-| --- | --- | --- | --- |
-| Email address, account name, user ID | Registration/sign-in to the server | Account management and app functionality | Account is optional for the device-local journal; retained until deletion |
-| Photos | Private upload after signing in; optional identification sends a resized photo to OpenAI | App functionality / identification | Optional; uploaded copies retained until account deletion |
-| Precise location | GPS-tagged discovery uploads to private account | App functionality / journal map | Optional permission, no background location; retained with the discovery |
-| Approximate location | Rounded coordinates for automatic place names and optional identification | App functionality | Optional when GPS/identification is used; do not claim provider processing is ephemeral without confirming their retention |
-| Other user-generated content | Notes, names, discovery metadata, capture dates/times and corrections upload with a discovery | App functionality | Optional; retained with the discovery |
-| Authentication secrets | Password supplied for account actions, salted hash retained; owner's shared service credential encrypted on server | Account management / optional identification | Password and API key are not persisted by the native client; existing server service configuration is managed on the desktop website; the native app has no key entry |
+| Data category | Transmission / purpose | Optional / retention |
+| --- | --- | --- |
+| Email, name, user IDs | Registration, account administration, member matching and purchase-account binding | Cloud accounts are optional for a device-local journal; account-associated records remain until deletion, subject to necessary legal/security exceptions |
+| Journal photos | Signed-in private uploads; chosen images/context sent for identification and publication checks | Optional cloud/AI features; uploaded and archived copies persist until removal/deletion |
+| Avatar source and generated portrait | Explicit **Make my avatar** action sends a cleaned portrait to the service and OpenAI; the cartoon becomes the profile image | Optional, with explicit permission/processing notice. My Trail Log does not persist or publish the source. OpenAI retention terms apply |
+| Precise location | Foreground GPS or preserved capture coordinates upload with a discovery | Optional permission; subsequent captures reuse the grant. No background location permission. Retained with the discovery |
+| Approximate location | Rounded coordinates for AI/place names, coarse weather coordinates, map display area | Optional location features; retained journal GPS differs from short-lived lookups/provider processing |
+| Contacts | Local review after Contacts permission; selected/confirmed email addresses sent for opted-in member matching or invitations | Optional. No silent full address-book upload. Contact names/full lists are not stored; invitation addresses enforce access |
+| Other user-generated content | Notes, corrections, dates, categories, identification, avatars, achievements, sharing choices, acorns, follows, saved places, blocks and reports | Feature operation/moderation; retained with the account. Archive is not deletion |
+| Purchase history | Google product/purchase identity, server-verified entitlement, expiry, acknowledgement and usage | Optional subscriptions. Purchase tokens are server-encrypted. No full card details received |
+| App activity / interactions | Deliberate social actions, badges, allowance and AI-processing counters | Functionality, moderation, quota enforcement and abuse prevention; no behavioural marketing analytics |
+| Security / technical data | Session identifiers, salted password hashes, network/rate-limit data, administration audit | Account protection and operational security. These are not public profile data |
 
-Data is linked to the signed-in account when uploaded. Guest photos remain local unless the user signs in or chooses to share/export. Network calls use HTTPS; Android disallows cleartext traffic. The session cookie is encrypted locally using Android Keystore. Device-local private files are not Android cloud-backup enabled.
+Uploaded data is linked to the signed-in account. Guest photos remain local unless the member signs in, explicitly shares or exports. Public identity is username, opaque ID and illustrated avatar; private email, account name and notes are excluded from ordinary community access.
 
-## Collection and sharing
+## Collection and external transfers
 
-The app collects account details, uploaded photos, optional location and user-generated journal content. **Do not declare “no data collected.”** Optional OpenAI analysis transmits photos and approximate location; Photon receives rounded coordinates for place names; map tiles expose IP address and the displayed tile area to the map provider. Wikipedia/GBIF receive name lookups.
+**Do not select “no data collected”.** Cloudflare hosts private storage. OpenAI receives images for identification, publication checks and consented avatar creation with relevant context. Recognition uses an efficient first pass, with an automatic stronger Closer Look for harder/uncertain photos when allowance permits. Processing results and allowance history persist to avoid duplicate processing and enforce limits; they are not advertising profiles. Avatar-source EXIF/GPS is removed and the source never becomes a journal entry. The cartoon passes a separate suitability/non-photographic check before activation. AI checks can fail or be mistaken.
 
-Play's sharing definition has exceptions for qualifying service providers and explicitly user-initiated transfers. Assess each external provider under the actual contract and terms before selecting sharing answers. If an exception is not established, disclose the transfer conservatively: photos and approximate location to OpenAI when identification is enabled, approximate location to Photon for place names. Identification/place lookups round coordinates. Publishing checks currently include the explicitly shared capture coordinates and caption. User-chosen photo/story sharing is initiated by the user; story cards omit exact GPS.
+Photon receives rounded coordinates/place queries; Postcodes.io receives postcode searches. Open-Meteo or MET Norway receive coarse weather coordinates. Map providers receive IP/displayed area. Wikipedia and GBIF receive reference-name searches. Review Google Play Billing Library's current vendor declaration too.
 
-Photos, coordinates and notes in private Cloudflare storage are retained, so they are not “processed ephemerally.” Avoid blanket statements of zero provider retention: OpenAI requests use `store:false`, which is not a guarantee that provider logs are disabled.
+Play sharing exceptions can cover qualifying processors/service providers or user-initiated transfers. Apply an exception only where the actual relationship and terms qualify; otherwise disclose conservatively. `store:false` does not prove zero OpenAI retention. Private journal storage is persistent; do not mark it as ephemeral. Even transient avatar-source handling on our service is not a guarantee that a provider instantly deletes its own copy.
 
-## Other answers supported by the source
+Publishing is explicit and audience-specific: everyone signed in, a browsed local map circle, or accepted private invitations. Shared discoveries include the selected image, saved coordinates/place/date, story, username and cartoon. A local circle is the map being browsed, not verified physical presence. Unpublishing, archiving and deletion revoke service access but cannot recall downloads/screenshots.
 
-- Data encrypted in transit: **yes** for app/server/provider requests.
-- User can request account deletion: **yes**, in the native account menu and at https://fieldlogger.co.uk/delete-account.
-- Advertising: **no**. No advertising SDK is included.
-- Play in-app purchases: **no**. OpenAI use is charged to the app owner's shared OpenAI project; users do not enter their own key.
-- Continuous/background location collection: **no**. Foreground capture fixes stop after a short window.
-- Native app's own analytics/tracking SDK: **none included**. This does not assert that operating systems or hosting providers keep no operational logs.
-- Independent security review: **do not claim one** on the basis of automated tests.
+## Supported Console answers
 
-Deletion clears the server account, sessions, saved API key and uploaded discoveries; it also clears that account's local journal where deletion is requested. Exports and copies on other devices must be removed separately. Signing out keeps local files separated by account; it is not deletion.
+- **Encrypted in transit: yes.** HTTPS; Android cleartext disabled.
+- **Account deletion: yes.** Native settings and https://fieldlogger.co.uk/delete-account.
+- **Advertising: no.** No ad SDK or advertising-ID feature.
+- **In-app purchases: supported.** Google Play Billing is integrated. Checkout stays disabled until products, secure verification and launch/lifecycle checks are complete. Do not reuse the old “no Billing” answer.
+- **Background location: no.** Short foreground capture/weather fixes. Background uploads do not collect continuous location.
+- **Contacts/notifications: optional.** READ_CONTACTS follows an explanation and review. POST_NOTIFICATIONS is requested when enabling alerts on Android 13+. WorkManager periodically checks accessible followed publications; no Firebase/push-token SDK.
+- **Tracking SDK: none added by My Trail Log.** Providers/operating systems may keep operational information.
+- **Independent security certification: do not claim one** from tests or adversarial agents.
 
-Official guide: https://support.google.com/googleplay/android-developer/answer/10787469.
+Android sessions are protected using Keystore; app-private files are not enabled for Android cloud backup. AI and Google verification credentials remain server-side. Admins view membership identity/status, plan and usage for support; administrative changes are authorized and audited, not unrestricted access to private originals.
 
-Archive retains the complete discovery, including GPS, and is not deletion. Archived photos sync and remain in exports. Branded photo stories include the place by default, with a preview option to hide it, while omitting precise GPS and EXIF.
+## Retention, deletion and exports
 
+Archive preserves photos/metadata and permanent earned badges. The generated avatar persists; its source is not stored by My Trail Log. Deletion removes live account/journal/profile/avatar/social records/uploads and clears the requesting device's account data. Copies on other devices, exports and necessary provider/security/legal records can need separate handling.
 
-## Community features in 2.3.0
+Cloud ZIP downloads are always free, including active/archived originals and available account/journal metadata. Unsynced device-only photos require sync or local backup. Exports contain precise saved GPS/private notes. Password hashes, login/invitation tokens and encrypted billing credentials are excluded.
 
-This is an app with user-generated content and user interaction. Update Play’s content-rating, target-audience and Data safety answers for this release before rollout. Published photos intentionally share the selected image, precise saved GPS, place, capture time and story with the chosen audience. Public profile information is limited to username and an opaque ID. Account names, emails and private notes are excluded. Acorn counts are public; bookmarks and following/blocking lists are private.
+## Audience and public operator
 
-Selected email addresses are transmitted for opt-in contact discovery and private invitations. Android optionally requests READ_CONTACTS to review names and email addresses on the device. Only addresses explicitly selected and confirmed for matching are sent; contact names, full address books and contact lists are not stored on the server. Declare optional Contacts processing in the Console questionnaire. Invitation addresses are retained to enforce access. Disclose selected contacts/email data according to the Console questionnaire; do not claim that no contact information is processed. Reports store a reason, optional text and account association for moderation. Publishing sends the photo and caption to OpenAI for a people/unsafe/private-information check. Reports hide photos; the owner reviews them. AI is not a guarantee of perfect moderation. Community consent, report, block and unpublish controls are built in.
+This is user-generated content with social interaction. Update content rating and target-audience answers. Terms set account eligibility at **16+**; this is not verified identity/age or a child-directed/Families claim. Choose Console ratings from actual features, not the artwork.
 
-Unpublishing/archiving removes further shared access, but cannot recall saved copies. Account deletion also removes social records and published storage. Privacy: https://fieldlogger.co.uk/privacy. Guidelines: https://fieldlogger.co.uk/community-rules.
+Brand: **My Trail Log**. Current operator: **Nathan Tracey**, 422 Milton Road, Waterlooville, PO8 8LD, United Kingdom. **Thinking About Ltd is proposed, not incorporated**; do not invent a company number.
 
-## Native preferences and permanent achievements in 2.3.0
+Keep the existing domain until a verified migration:
 
-Illustrated avatar choices and achievement IDs/earned timestamps sync to the account and are deleted with it. Avatars are public with a username, not profile photographs. Achievements are private and permanent after earning; archiving does not remove them.
+- https://fieldlogger.co.uk/privacy
+- https://fieldlogger.co.uk/terms
+- https://fieldlogger.co.uk/cookies
+- https://fieldlogger.co.uk/community-rules
+- https://fieldlogger.co.uk/delete-account
+- https://fieldlogger.co.uk/support · ntracey@gmail.com
 
-Forecast lookups send coarse coordinates rounded to about 10 km to Open-Meteo or MET Norway and cache them for 15 minutes, without per-user location history. Postcode/place search queries go to Postcodes.io or Photon. Weather effects and backgrounds can be disabled.
-
-POST_NOTIFICATIONS is optional on Android 13+. WorkManager periodically checks currently readable publications from followed members. There is no push token or third-party messaging SDK. Notification contents use the public username and photo name, with private lock-screen visibility.
-
-Bulk publication requires explicit audience selection, consent and confirmation. It is a one-off batch for current active photos, not automatic sharing of future captures. Unpublish all cancels queued batches and revokes every shared audience/invite; private originals and achievements remain.
+Official guidance: https://support.google.com/googleplay/android-developer/answer/10787469.

@@ -126,6 +126,9 @@ public class LauncherActivityTest {
       assertTrue(hasText(root, "App preferences"));
       assertTrue(hasText(root, "Archive"));
       assertTrue(hasText(root, "Sync now"));
+      assertTrue(hasText(root, "Make my avatar"));
+      assertTrue(hasText(root, "Photo allowance & subscription"));
+      assertTrue(hasText(root, "Download all photos & data (ZIP)"));
       assertNull(org.robolectric.shadows.ShadowDialog.getLatestDialog());
       find(root, "Sign in or register. Sync your journal and join your trail circle")
           .performClick();
@@ -134,6 +137,24 @@ public class LauncherActivityTest {
               org.robolectric.shadows.ShadowDialog.getLatestDialog();
       assertTrue(hasText(dialog.getWindow().getDecorView(), "Welcome back"));
       assertTrue(hasText(dialog.getWindow().getDecorView(), "Import web journal backup"));
+    }
+  }
+
+  @Test
+  public void membershipOpensNativeSubscriptionPlansWithoutLaunchingABrowser() {
+    try (ActivityController<LauncherActivity> controller = start()) {
+      LauncherActivity app = controller.get();
+      View root = app.getWindow().getDecorView();
+      find(root, "Your profile and settings").performClick();
+      find(
+              root,
+              "Photo allowance & subscription. Free and paid plans, trial, restore or manage in"
+                  + " Google Play")
+          .performClick();
+      Intent opened = Shadows.shadowOf(app).getNextStartedActivity();
+      assertNotNull(opened);
+      assertEquals(SubscriptionActivity.class.getName(), opened.getComponent().getClassName());
+      assertNull(Shadows.shadowOf(app).getNextStartedActivity());
     }
   }
 
@@ -148,6 +169,73 @@ public class LauncherActivityTest {
       assertNotNull(permission);
       assertEquals("android.content.pm.action.REQUEST_PERMISSIONS", permission.getAction());
       assertTrue(hasText(root, "Your field journal"));
+    }
+  }
+
+  @Test
+  public void tentativeIdentificationExplainsUncertaintyAndOffersAnExplicitCloserReview()
+      throws Exception {
+    try (ActivityController<LauncherActivity> controller = start()) {
+      LauncherActivity app = controller.get();
+      org.json.JSONObject data =
+          Observation.fresh(java.util.UUID.randomUUID().toString(), java.time.Instant.now());
+      org.json.JSONObject identification = new org.json.JSONObject();
+      identification.put("confidence", "low");
+      identification.put("summary", "A possible oak leaf. More visible detail is needed.");
+      identification.put("recognition", new org.json.JSONObject().put("mode", "tentative"));
+      Observation.put(data, "identification", identification);
+      Observation.put(data, "analysisState", "complete");
+      Observation record =
+          new Observation(
+              data,
+              new Repository(app).owner(),
+              new java.io.File(app.getCacheDir(), "closer-review-ui-fixture.jpg"),
+              false,
+              "");
+      java.lang.reflect.Method detail =
+          LauncherActivity.class.getDeclaredMethod("showDetail", Observation.class);
+      detail.setAccessible(true);
+      detail.invoke(app, record);
+      View root = app.getWindow().getDecorView();
+      assertTrue(hasText(root, "suggested identity as tentative"));
+      assertNotNull(find(root, "Try a closer look"));
+      identification.getJSONObject("recognition").put("mode", "quick");
+      detail.invoke(app, record);
+      assertNull(find(root, "Try a closer look"));
+    }
+  }
+
+  @Test
+  public void failedCloudIdentificationOffersManualRetryWhilePendingUploadsKeepTheirSyncFlow()
+      throws Exception {
+    try (ActivityController<LauncherActivity> controller = start()) {
+      LauncherActivity app = controller.get();
+      org.json.JSONObject data =
+          Observation.fresh(java.util.UUID.randomUUID().toString(), java.time.Instant.now());
+      String owner = new Repository(app).owner();
+      java.io.File photo = new java.io.File(app.getCacheDir(), "failed-identification-ui.jpg");
+      java.lang.reflect.Method detail =
+          LauncherActivity.class.getDeclaredMethod("showDetail", Observation.class);
+      detail.setAccessible(true);
+      View root = app.getWindow().getDecorView();
+
+      detail.invoke(
+          app,
+          new Observation(data, owner, photo, false, "The previous analysis could not finish."));
+      assertNotNull(find(root, "Try again"));
+      assertNull(find(root, "Try a closer look"));
+      assertTrue(hasText(root, "previous analysis could not finish"));
+
+      detail.invoke(app, new Observation(data, owner, photo, true, "Waiting for a connection."));
+      assertNull(find(root, "Try again"));
+
+      detail.invoke(app, new Observation(data, owner, photo, false, ""));
+      assertNull(find(root, "Try again"));
+      Observation.put(data, "analysisState", "error");
+      detail.invoke(app, new Observation(data, owner, photo, false, ""));
+      assertNotNull(find(root, "Try again"));
+      assertTrue(hasText(root, "Identification could not finish"));
+      assertNull(Shadows.shadowOf(app).getNextStartedActivity());
     }
   }
 

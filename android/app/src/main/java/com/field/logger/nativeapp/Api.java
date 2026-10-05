@@ -11,10 +11,20 @@ public final class Api {
 
   public static final class Failure extends IOException {
     public final int status;
+    public final String code;
 
     public Failure(int status, String message) {
+      this(status, message, "");
+    }
+
+    public Failure(int status, String message, String code) {
       super(message);
       this.status = status;
+      this.code = code == null ? "" : code;
+    }
+
+    public boolean photoLimit() {
+      return status == 429 && "photo_limit".equals(code);
     }
   }
 
@@ -51,7 +61,8 @@ public final class Api {
             .url(ORIGIN + path)
             .header("Accept", "application/json")
             .header("Origin", ORIGIN)
-            .header("User-Agent", "MyTrailLog-Android/2.3.0");
+            .header(
+                "User-Agent", "MyTrailLog-Android/" + com.field.logger.BuildConfig.VERSION_NAME);
     if (cookie != null && !cookie.isEmpty()) request.header("Cookie", cookie);
     byte[] payload = body;
     if (payload == null
@@ -65,15 +76,18 @@ public final class Api {
                 okhttp3.MediaType.parse(contentType == null ? "application/json" : contentType),
                 payload);
     request.method(method, requestBody);
+    String operation = path.split("\\?", 2)[0];
     okhttp3.OkHttpClient selected =
         client
             .newBuilder()
             .readTimeout(
-                (path.endsWith("/identify")
-                        || path.endsWith("/publish")
-                        || path.contains("/moderation/"))
-                    ? 100
-                    : 25,
+                operation.endsWith("/avatar/photo")
+                    ? 180
+                    : operation.endsWith("/identify")
+                        ? 240
+                        : (operation.endsWith("/publish") || operation.contains("/moderation/"))
+                            ? 100
+                            : 25,
                 java.util.concurrent.TimeUnit.SECONDS)
             .build();
     try (okhttp3.Response response = selected.newCall(request.build()).execute()) {
@@ -81,12 +95,14 @@ public final class Api {
           read(response.body() == null ? null : response.body().byteStream(), MAX_RESPONSE);
       if (!response.isSuccessful()) {
         String message = "The journal service is temporarily unavailable.";
+        String code = "";
         try {
-          message =
-              new JSONObject(new String(bytes, StandardCharsets.UTF_8)).optString("error", message);
+          JSONObject failure = new JSONObject(new String(bytes, StandardCharsets.UTF_8));
+          message = failure.optString("error", message);
+          code = failure.optString("code", "");
         } catch (JSONException ignored) {
         }
-        throw new Failure(response.code(), message);
+        throw new Failure(response.code(), message, code);
       }
       String cookieValue = "";
       for (String value : response.headers("Set-Cookie")) {
@@ -106,6 +122,60 @@ public final class Api {
             body == null ? null : body.toString().getBytes(StandardCharsets.UTF_8),
             "application/json")
         .json();
+  }
+
+  public JSONObject identifyCloser(String id, String cookie) throws Exception {
+    UUID.fromString(id);
+    return json("/api/observations/" + id + "/identify?closer=1", "POST", cookie, new JSONObject())
+        .getJSONObject("identification");
+  }
+
+  /** Streams the authenticated free export to the chosen document, regardless of ZIP size. */
+  public long exportZip(String cookie, OutputStream destination) throws IOException {
+    if (cookie == null || cookie.isEmpty())
+      throw new Failure(401, "Sign in to download your cloud journal.");
+    okhttp3.Request request =
+        new okhttp3.Request.Builder()
+            .url(ORIGIN + "/api/export")
+            .header("Accept", "application/zip")
+            .header("Origin", ORIGIN)
+            .header("Cookie", cookie)
+            .header("User-Agent", "MyTrailLog-Android/" + com.field.logger.BuildConfig.VERSION_NAME)
+            .get()
+            .build();
+    try (okhttp3.Response response =
+        client
+            .newBuilder()
+            .readTimeout(90, java.util.concurrent.TimeUnit.SECONDS)
+            .build()
+            .newCall(request)
+            .execute()) {
+      if (!response.isSuccessful()) {
+        byte[] bytes =
+            read(response.body() == null ? null : response.body().byteStream(), 64 * 1024);
+        String message = "The journal export could not be downloaded. Please try again.";
+        try {
+          message =
+              new JSONObject(new String(bytes, StandardCharsets.UTF_8)).optString("error", message);
+        } catch (JSONException ignored) {
+        }
+        throw new Failure(response.code(), message);
+      }
+      if (response.body() == null
+          || !response.header("Content-Type", "").startsWith("application/zip"))
+        throw new IOException("The service did not return a journal ZIP file.");
+      long written = 0;
+      byte[] buffer = new byte[64 * 1024];
+      try (InputStream stream = response.body().byteStream()) {
+        int count;
+        while ((count = stream.read(buffer)) != -1) {
+          destination.write(buffer, 0, count);
+          written += count;
+        }
+      }
+      destination.flush();
+      return written;
+    }
   }
 
   public void upload(Observation record, String cookie) throws Exception {

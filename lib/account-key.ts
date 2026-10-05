@@ -1,4 +1,7 @@
-import {visionRequestOptions} from './vision-model';
+import jpeg from 'jpeg-js';
+import {STRONG_VISION_MODEL,visionDataUrl,visionRequestOptions} from './vision-model';
+import {reserveAiBudget,settleAiBudget} from './ai-budget';
+import {serviceKeyOwner} from './key-maintenance-policy';
 import { bindings, database, json } from "./server";
 import { sealKey, unsealKey } from "./key-crypto";
 
@@ -11,7 +14,7 @@ export async function keyStatus(userId: string) {
   return {
     hasKey: !!row,
     serverKey: await sharedKeyConfigured(),
-    canSave: !!bindings().API_KEY_ENCRYPTION_KEY && (!bindings().SHARED_OPENAI_KEY_OWNER_ID || userId === bindings().SHARED_OPENAI_KEY_OWNER_ID),
+    canSave: !!bindings().API_KEY_ENCRYPTION_KEY && serviceKeyOwner(userId,bindings()),
     updatedAt: row?.updated_at || null,
   };
 }
@@ -31,10 +34,10 @@ export async function accountKeySettings(
   action?: string,
 ) {
   if (request.method === "GET" && !action) return json(await keyStatus(userId));
-  if (bindings().SHARED_OPENAI_KEY_OWNER_ID && userId !== bindings().SHARED_OPENAI_KEY_OWNER_ID)
+  if (!serviceKeyOwner(userId,bindings()))
     return json({error:"Identification is managed by My Trail Log."},403);
   if (request.method === "POST" && action === "test") {
-    // A tiny Responses request tests the same model and permission as photo analysis.
+    // A known tiny JPEG verifies image input and a complete primary-model reply.
     // Rate limit tests to one per 10 seconds per account, including failed tests.
     const now = Date.now();
     const limit = await database()
@@ -48,8 +51,11 @@ export async function accountKeySettings(
         { error: "Please wait a few seconds before testing again." },
         429,
       );
-    const apiKey = await getAccountKey(userId);
-    if (!apiKey) return json({ error: "Save an OpenAI API key first." }, 400);
+    const apiKey = await getServiceKey(userId);
+    if (!apiKey) return json({ error: "Identification is not configured yet." }, 503);
+    const data=new Uint8Array(32*32*4);for(let i=0;i<data.length;i+=4){data[i]=40;data[i+1]=176;data[i+2]=80;data[i+3]=255;}
+    const probe=visionDataUrl(new Uint8Array(jpeg.encode({width:32,height:32,data},80).data));data.fill(0);
+    const reservation=await reserveAiBudget(userId,null,'model-test',STRONG_VISION_MODEL);
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
@@ -57,14 +63,19 @@ export async function accountKeySettings(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        ...visionRequestOptions(bindings().OPENAI_MODEL, "test"),
+        ...visionRequestOptions(STRONG_VISION_MODEL, "test"),
         store: false,
-        input: "Reply with OK.",
+        input:[{role:'user',content:[{type:'input_text',text:'What is the dominant colour of this square? Return the required JSON.'},{type:'input_image',image_url:probe,detail:'high'}]}],
+        text:{format:{type:'json_schema',name:'vision_connection',strict:true,schema:{type:'object',additionalProperties:false,properties:{colour:{type:'string',enum:['green','red','blue','other']}},required:['colour']}}},
       }),
       signal: AbortSignal.timeout(30000),
     });
     await inspectOpenAIResponse(response, apiKey);
-    await response.body?.cancel();
+    const result:any=await response.json();
+    await settleAiBudget(reservation,result).catch(()=>{});
+    const output=result.output?.flatMap((item:any)=>item.content||[]).find((item:any)=>item.type==='output_text')?.text;
+    let completed=false;try{completed=result.status==='completed'&&JSON.parse(output).colour==='green';}catch{}
+    if(!completed)return json({error:'The identification connection did not complete its image check. Please try later.'},502);
     return json({
       ok: true,
       message: "Connected. Photo identification is ready.",

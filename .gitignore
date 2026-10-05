@@ -4,6 +4,7 @@ dist/
 .wrangler/
 .sites-runtime/
 .env*
+.dev.vars*
 !.env.example
 *.tsbuildinfo
 android/.gradle/

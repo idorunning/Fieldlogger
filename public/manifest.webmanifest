@@ -3,7 +3,7 @@
   "name": "My Trail Log",
   "short_name": "My Trail Log",
   "description": "Photograph, identify and remember the small wonders outdoors.",
-  "start_url": "/",
+  "start_url": "/journal",
   "scope": "/",
   "display": "standalone",
   "background_color": "#fffdf7",
@@ -27,7 +27,7 @@
     {
       "name": "Take a photo",
       "short_name": "Camera",
-      "url": "/?action=capture",
+      "url": "/journal?action=capture",
       "icons": [
         {
           "src": "/icon-192.png",
@@ -38,7 +38,7 @@
     {
       "name": "My journal",
       "short_name": "Journal",
-      "url": "/?view=journal",
+      "url": "/journal?view=journal",
       "icons": [
         {
           "src": "/icon-192.png",

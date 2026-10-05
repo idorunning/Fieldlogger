@@ -1,8 +1,14 @@
 /* App shell and original photos are separate: API responses are never cached. */
-const CACHE = "fieldnotes-shell-v8";
+const CACHE = "fieldnotes-shell-v10";
 const SHELL = [
   "/",
+  "/journal",
   "/privacy",
+  "/terms",
+  "/cookies",
+  "/support",
+  "/pricing",
+  "/community-rules",
   "/delete-account",
   "/favicon.svg",
   "/icon-192.png",
@@ -11,6 +17,7 @@ const SHELL = [
   "/woodland.jpg",
   "/field-robin.jpg",
   "/field-fox.jpg",
+  "/company/journal-preview.webp",
   "/fonts/dm-sans-latin.woff2",
   "/fonts/kalam-bold.ttf",
 ];
@@ -56,17 +63,19 @@ self.addEventListener("fetch", (event) => {
     request.method !== "GET" ||
     url.origin !== self.location.origin ||
     url.pathname.startsWith("/api/") ||
+    url.pathname === "/admin" ||
+    url.pathname.startsWith("/admin/") ||
     url.pathname.includes("signin-with-chatgpt") ||
     url.pathname.includes("signout-with-chatgpt") ||
     request.headers.has("rsc")
   )
     return;
   if (request.mode === "navigate") {
-    const shellPath = ["/privacy", "/delete-account"].includes(url.pathname) ? url.pathname : "/";
+    const shellPath = SHELL.includes(url.pathname) ? url.pathname : null;
     // Return the saved shell immediately; refresh it without delaying launch.
     const refresh = (async () => {
       const response = await fetch(request);
-      if (response.ok && !response.redirected && new URL(response.url).origin === self.location.origin) {
+      if (shellPath && response.ok && !response.redirected && new URL(response.url).origin === self.location.origin) {
         const cache = await caches.open(CACHE);
         await cache.put(shellPath, response.clone());
       }
@@ -74,14 +83,14 @@ self.addEventListener("fetch", (event) => {
     })();
     event.waitUntil(refresh.then(() => undefined).catch(() => undefined));
     event.respondWith((async () => {
-      const cached = await caches.match(shellPath);
+      const cached = shellPath ? await caches.match(shellPath) : null;
       if (cached) return cached;
       try { return await refresh; }
       catch { return new Response("Open My Trail Log online once to save it for offline use.", {headers: {"Content-Type": "text/plain"}}); }
     })());
     return;
   }
-  if (/\.(js|css|woff2?|ttf|png|jpg|svg)$/.test(url.pathname))
+  if (/\.(js|css|woff2?|ttf|png|jpe?g|webp|svg)$/.test(url.pathname))
     event.respondWith(
       (async () => {
         const cached = await caches.match(request);

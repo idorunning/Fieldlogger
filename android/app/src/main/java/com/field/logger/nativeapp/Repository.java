@@ -71,6 +71,7 @@ public final class Repository {
       db.adoptGuest(user.getString("id"));
       enqueue();
       FollowWorker.schedule(context);
+      BillingManager.restore(context);
       try {
         if (new JSONObject(
                 TrailPreferences.of(context, user.getString("id")).getString("bulkJob", "{}"))
@@ -93,6 +94,7 @@ public final class Repository {
       androidx.work.WorkManager.getInstance(context)
           .cancelUniqueWork("bulk-publish-" + signedOutOwner);
       session.clear();
+      AvatarImages.clearCache(context);
       androidx.core.app.NotificationManagerCompat.from(context).cancelAll();
     }
   }
@@ -106,6 +108,7 @@ public final class Repository {
       api.json("/api/account", "DELETE", user.optString("cookie"), form);
       String id = user.optString("id");
       session.clear();
+      AvatarImages.clearCache(context);
       db.deleteOwner(id);
       db.deleteOwner("draft:" + id);
       TrailPreferences.of(context, id).edit().clear().commit();
@@ -140,10 +143,36 @@ public final class Repository {
       if (me == null || !me.optString("id").equals(owner))
         throw new Api.Failure(
             401, "Sign in again to resume uploads. Your photos are safe on this phone.");
+      JSONArray remote =
+          api.json("/api/observations", "GET", cookie, null).getJSONArray("observations");
+      Set<String> existingIds = new HashSet<>();
+      for (int i = 0; i < remote.length(); i++)
+        existingIds.add(remote.getJSONObject(i).optString("id"));
+      boolean allowanceLimited = false, uploaded = false;
+      String allowanceMessage =
+          "Your cloud photo allowance is used up. New photos stay saved on this phone. Uploads"
+              + " resume when your allowance renews or your plan changes. Existing photos and ZIP"
+              + " downloads remain free.";
+      android.content.SharedPreferences preferences = TrailPreferences.of(context, owner);
+      try {
+        JSONObject billing = api.json("/api/billing", "GET", cookie, null);
+        allowanceLimited = billing.has("remaining") && billing.optInt("remaining", -1) == 0;
+        preferences.edit().putString("billingStatus", billing.toString()).apply();
+        if (!allowanceLimited) preferences.edit().remove("photoAllowanceMessage").apply();
+      } catch (Exception ignored) {
+        // The upload endpoint remains authoritative if the allowance summary is unavailable.
+      }
+      if (allowanceLimited)
+        preferences.edit().putString("photoAllowanceMessage", allowanceMessage).apply();
       for (Observation record : db.list(owner)) {
+        if (record.pending && allowanceLimited && !existingIds.contains(record.id())) {
+          db.error(record.id(), owner, allowanceMessage);
+          continue;
+        }
         try {
           if (record.pending) {
             api.upload(record, cookie);
+            uploaded = true;
             if (!db.markUploaded(record.id(), record.revision(), owner)) {
               retry = true;
               continue;
@@ -165,14 +194,18 @@ public final class Repository {
         } catch (Api.Failure e) {
           db.error(record.id(), owner, identificationMessage(e));
           if (e.status == 401) throw e;
-          if (e.status != 503 && e.status != 400 && e.status != 409) retry = true;
+          if (e.photoLimit()) {
+            allowanceLimited = true;
+            allowanceMessage = e.getMessage();
+            preferences.edit().putString("photoAllowanceMessage", allowanceMessage).apply();
+          } else if (e.status != 503 && e.status != 400 && e.status != 409) retry = true;
         } catch (IOException e) {
           db.error(record.id(), owner, "Waiting for a connection. Your photo is saved.");
           retry = true;
         }
       }
-      JSONArray remote =
-          api.json("/api/observations", "GET", cookie, null).getJSONArray("observations");
+      if (uploaded)
+        remote = api.json("/api/observations", "GET", cookie, null).getJSONArray("observations");
       for (int i = 0; i < remote.length(); i++) {
         JSONObject data = remote.getJSONObject(i);
         String id = data.getString("id");
@@ -215,10 +248,11 @@ public final class Repository {
         JSONObject b = unlocks.getJSONObject(i);
         db.earn(owner, b.getString("badge"), b.getString("earnedAt"));
       }
-      android.content.SharedPreferences preferences = TrailPreferences.of(context, owner);
       if (preferences.getBoolean("avatarPending", false)) {
         String sent = preferences.getString("avatar", "{}");
-        api.json("/api/social/avatar", "PUT", cookie, new JSONObject(sent));
+        JSONObject descriptor = new JSONObject(sent);
+        if (!"generated".equals(descriptor.optString("kind")))
+          api.json("/api/social/avatar", "PUT", cookie, descriptor);
         if (sent.equals(preferences.getString("avatar", "{}")))
           preferences.edit().putBoolean("avatarPending", false).apply();
       }
@@ -248,6 +282,7 @@ public final class Repository {
 
   public static String identificationMessage(Api.Failure failure) {
     String message = failure.getMessage() == null ? "" : failure.getMessage();
+    if (failure.photoLimit()) return message;
     if (failure.status == 503
         || message.toLowerCase(Locale.ROOT).matches(".*(api|key|quota|billing).*"))
       return "Your photo is saved. Identification will be added when the service is available.";

@@ -128,6 +128,26 @@ public class JournalDbTest {
   }
 
   @Test
+  public void remoteRefreshKeepsFailedIdentificationVisibleUntilAResultArrives() {
+    Observation r = record();
+    db.save(r);
+    assertTrue(db.markUploaded(r.id(), r.revision(), owner));
+    db.error(r.id(), owner, "The previous analysis could not finish.");
+    JSONObject remote = Observation.copy(r.data);
+    assertTrue(db.mergeRemote(remote, owner, r.photo));
+    assertEquals("The previous analysis could not finish.", db.find(r.id()).error);
+    assertFalse(db.find(r.id()).pending);
+
+    JSONObject identification = new JSONObject();
+    Observation.put(identification, "name", "Oak");
+    Observation.put(remote, "identification", identification);
+    Observation.put(remote, "analysisState", "complete");
+    assertTrue(db.mergeRemote(remote, owner, r.photo));
+    assertEquals("", db.find(r.id()).error);
+    assertEquals("Oak", db.find(r.id()).data.optJSONObject("identification").optString("name"));
+  }
+
+  @Test
   public void exifCoordinatesAreNotReplacedByCurrentLocation() {
     Observation r = record();
     Observation.put(r.data, "latitude", 0d);

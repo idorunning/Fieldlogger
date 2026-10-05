@@ -6,10 +6,43 @@ import java.util.*;
 
 /** Local capture dates determine calendar badges. Earned badges never depend on active photos. */
 public final class Achievements {
-  public static final String[] LEVELS = {
-    "Pine", "Beech", "Oak", "Sandalwood", "Blackwood", "Agarwood"
-  };
+  public static final String[] LEVELS = {"Soil", "Clay", "Flint", "Quartz", "Amber", "Gold"};
   public static final int[] THRESHOLDS = {0, 12, 30, 60, 100, 150};
+
+  /** Material names and colour are display-only: historical badge IDs and unlocks stay intact. */
+  public static final int[] LEVEL_COLOURS = {
+    0xff76543e, 0xffa94f3a, 0xff4f6576, 0xff76559a, 0xff965408, 0xffcfa830
+  };
+
+  public static final int[] LEVEL_BACKGROUND = {
+    0xfff0e6de, 0xffffe9df, 0xffe6edf2, 0xffeee5f7, 0xffffedcf, 0xfffff2c7
+  };
+  public static final String[] LEVEL_DESCRIPTION = {
+    "Every trail begins with the soil beneath your feet.",
+    "Earth shaped by water: look for colour, texture and tiny details.",
+    "A quiet stone with a sharp story, revealed by closer looking.",
+    "A glint in the rock: more kinds of discoveries, in different light.",
+    "A rare fragment of ancient sunlight, keeping a moment forever.",
+    "The rarest trail treasure: a rich collection of lasting memories."
+  };
+
+  public static int colour(int layer) {
+    return LEVEL_COLOURS[Math.max(0, Math.min(5, layer))];
+  }
+
+  public static int background(int layer) {
+    return LEVEL_BACKGROUND[Math.max(0, Math.min(5, layer))];
+  }
+
+  /** Material-coloured normal text on paper: gold uses a darker ochre for legibility. */
+  public static int ink(int layer) {
+    return layer >= 5 ? 0xff76601a : colour(layer);
+  }
+
+  /** White on the five dark materials, dark brown on bright gold (WCAG AA contrast). */
+  public static int onColour(int layer) {
+    return layer >= 5 ? 0xff3d330b : 0xffffffff;
+  }
 
   public static final class Badge {
     public final String id, name, description;
@@ -274,22 +307,28 @@ public final class Achievements {
     String[][] holidays = {
       {"01-01", "A fresh beginning", "New Year’s Day"},
       {"01-25", "Burns Night wander", "25 January"},
-      {"02-02", "Winter turning", "2 February"}, {"02-14", "Love your outdoors", "Valentine’s Day"},
+      {"02-02", "Winter turning", "2 February"},
+      {"02-14", "Love your outdoors", "Valentine’s Day"},
       {"02-29", "One in four", "Leap Day, 29 February"},
       {"03-01", "Daffodil day", "St David’s Day"},
-      {"03-17", "A little green", "St Patrick’s Day"}, {"03-20", "Spring’s doorstep", "20 March"},
+      {"03-17", "A little green", "St Patrick’s Day"},
+      {"03-20", "Spring’s doorstep", "20 March"},
       {"04-01", "No fooling nature", "1 April"},
       {"04-22", "Our remarkable Earth", "Earth Day, 22 April"},
-      {"04-23", "English countryside", "St George’s Day"}, {"05-01", "May Day moment", "1 May"},
+      {"04-23", "English countryside", "St George’s Day"},
+      {"05-01", "May Day moment", "1 May"},
       {"05-20", "Busy little pollinators", "World Bee Day, 20 May"},
       {"05-22", "Life in all its forms", "Biodiversity Day, 22 May"},
       {"06-05", "A greener thought", "Environment Day, 5 June"},
       {"06-08", "Blue planet", "World Oceans Day, 8 June"},
-      {"06-21", "Long light", "21 June"}, {"07-01", "High summer", "1 July"},
-      {"08-01", "August abundance", "1 August"}, {"09-22", "Autumn’s doorstep", "22 September"},
+      {"06-21", "Long light", "21 June"},
+      {"07-01", "High summer", "1 July"},
+      {"08-01", "August abundance", "1 August"},
+      {"09-22", "Autumn’s doorstep", "22 September"},
       {"10-04", "Animal appreciation", "World Animal Day, 4 October"},
       {"10-31", "Spooky little wonders", "Halloween"},
-      {"11-05", "November glow", "5 November"}, {"11-11", "A quiet remembrance", "11 November"},
+      {"11-05", "November glow", "5 November"},
+      {"11-11", "A quiet remembrance", "11 November"},
       {"11-30", "St Andrew’s discovery", "St Andrew’s Day"},
       {"12-21", "Winter light", "21 December"},
       {"12-24", "A Christmas Eve pause", "Christmas Eve"},

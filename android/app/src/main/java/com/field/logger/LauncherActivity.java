@@ -39,6 +39,7 @@ public final class LauncherActivity extends AppCompatActivity {
       LIME = 0xfff0dc7a,
       MUTED = 0xff728070;
   private Repository repo;
+  private AvatarPhotoController avatarStudio;
   private LocationCapture locator;
   private FrameLayout root, body;
   private LinearLayout shell;
@@ -57,11 +58,15 @@ public final class LauncherActivity extends AppCompatActivity {
   private volatile android.location.Location fix;
   private final Map<String, Long> pendingLocations = new java.util.concurrent.ConcurrentHashMap<>();
   private final Map<String, String> scrapbookPages = new HashMap<>();
+  private static final Set<String> CLOSER_REVIEWS =
+      java.util.concurrent.ConcurrentHashMap.newKeySet();
   private boolean busy = false;
   private ActivityResultLauncher<String> cameraPermission;
   private ActivityResultLauncher<String[]> locationPermission;
   private ActivityResultLauncher<String[]> gallery, backupImport;
-  private ActivityResultLauncher<String> export;
+  private ActivityResultLauncher<String> export, zipExport;
+  private String zipExportOwner = "";
+  private boolean zipDownloading;
   private Runnable afterLocation;
   private ActivityResultLauncher<String> notificationPermission;
   private int achievementLayer = -1;
@@ -74,6 +79,15 @@ public final class LauncherActivity extends AppCompatActivity {
   public void onCreate(Bundle state) {
     super.onCreate(state);
     repo = new Repository(this);
+    avatarStudio =
+        new AvatarPhotoController(
+            this,
+            value -> {
+              TrailPreferences.avatar(this, repo.owner(), value);
+              if (!"generated".equals(value.optString("kind"))) repo.enqueue();
+              if (screen.equals("account")) showAccount();
+              else if (screen.equals("journal")) reload();
+            });
     locator = new LocationCapture(this);
     WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
     getWindow().setStatusBarColor(FOREST);
@@ -125,6 +139,12 @@ public final class LauncherActivity extends AppCompatActivity {
             uri -> {
               if (uri != null) exportJournal(uri);
             });
+    zipExport =
+        registerForActivityResult(
+            new ActivityResultContracts.CreateDocument("application/zip"),
+            uri -> {
+              if (uri != null) exportCloudZip(uri);
+            });
     getOnBackPressedDispatcher()
         .addCallback(
             this,
@@ -158,6 +178,7 @@ public final class LauncherActivity extends AppCompatActivity {
     if (state != null) {
       screen = state.getString("screen", "journal");
       selectedId = state.getString("selected", "");
+      zipExportOwner = state.getString("zipExportOwner", "");
     }
     WorkManager.getInstance(this)
         .getWorkInfosForUniqueWorkLiveData("journal-sync")
@@ -235,6 +256,7 @@ public final class LauncherActivity extends AppCompatActivity {
   protected void onSaveInstanceState(Bundle state) {
     state.putString("screen", screen);
     state.putString("selected", selectedId);
+    state.putString("zipExportOwner", zipExportOwner);
     super.onSaveInstanceState(state);
   }
 
@@ -243,7 +265,13 @@ public final class LauncherActivity extends AppCompatActivity {
     super.onResume();
     if (map != null) map.onResume();
     if (repo != null) FollowWorker.schedule(this);
+    if (repo != null && repo.session.get() != null) BillingManager.restore(this);
     if (screen.equals("archive")) showArchive();
+    if (screen.equals("detail") && repo != null) {
+      Observation current = repo.db.find(selectedId);
+      if (current == null || !current.owner.equals(repo.owner())) showJournal();
+      else showDetail(current);
+    } else if (screen.equals("account") && repo != null) showAccount();
     if (locator != null && locator.granted() && repo != null) {
       List<Observation> recent = new ArrayList<>(repo.db.list(repo.owner()));
       recent.addAll(repo.db.list("draft:" + repo.owner()));
@@ -902,11 +930,22 @@ public final class LauncherActivity extends AppCompatActivity {
       space(details, 10);
       String why =
           record.error.isEmpty()
-              ? "Your photo is saved. Its identification will appear after upload."
+              ? ("error".equals(record.data.optString("analysisState"))
+                  ? "Your photo is saved. Identification could not finish. You can try again."
+                  : "Your photo is saved. Its identification will appear after upload.")
               : Repository.identificationMessage(new Api.Failure(0, record.error));
       details.addView(text(why, 16, MUTED, false));
       space(details, 12);
-
+      if (!record.pending
+          && (!record.error.isEmpty() || "error".equals(record.data.optString("analysisState")))) {
+        boolean reviewing = CLOSER_REVIEWS.contains(repo.owner() + ":" + record.id());
+        TextView retry =
+            button(reviewing ? "Identifying this photo…" : "Try again", false, () -> {});
+        retry.setEnabled(!reviewing);
+        retry.setOnClickListener(v -> tryCloserLook(record, retry));
+        details.addView(retry);
+        space(details, 12);
+      }
     } else {
       details.addView(
           text(
@@ -917,6 +956,24 @@ public final class LauncherActivity extends AppCompatActivity {
               MUTED,
               true));
       space(details, 12);
+      JSONObject recognition = ai.optJSONObject("recognition");
+      if (recognition != null && "tentative".equals(recognition.optString("mode"))) {
+        details.addView(
+            text(
+                "A closer review was not available. Treat this suggested identity as tentative "
+                    + "and check the visible features and other possibilities below.",
+                15,
+                FOREST,
+                true));
+        space(details, 10);
+        boolean reviewing = CLOSER_REVIEWS.contains(repo.owner() + ":" + record.id());
+        TextView retry =
+            button(reviewing ? "Reviewing the details…" : "Try a closer look", false, () -> {});
+        retry.setEnabled(!reviewing);
+        retry.setOnClickListener(v -> tryCloserLook(record, retry));
+        details.addView(retry);
+        space(details, 12);
+      }
       details.addView(text(ai.optString("summary"), 17, FOREST, false));
       section(details, "A little wonder", ai.optString("interestingFact"));
       section(
@@ -1247,7 +1304,7 @@ public final class LauncherActivity extends AppCompatActivity {
     int level = Achievements.level(earned.size());
     if (achievementLayer < 0) achievementLayer = level;
     achievementLayer = Math.min(level, achievementLayer);
-    content.addView(title(Achievements.LEVELS[level] + " explorer", 32, FOREST));
+    content.addView(title(Achievements.LEVELS[level] + " explorer", 32, Achievements.ink(level)));
     space(content, 8);
     content.addView(
         text(
@@ -1255,6 +1312,15 @@ public final class LauncherActivity extends AppCompatActivity {
             15,
             MUTED,
             false));
+    space(content, 10);
+    LinearLayout material = column();
+    pad(material, 15);
+    material.setBackground(shape(Achievements.background(level), 18));
+    material.addView(text("NATURE’S MATERIALS · COMMON TO RARE", 11, FOREST, true));
+    material.addView(text("Soil → Clay → Flint → Quartz → Amber → Gold", 14, FOREST, true));
+    space(material, 6);
+    material.addView(text(Achievements.LEVEL_DESCRIPTION[level], 14, FOREST, false));
+    content.addView(material);
     content.addView(
         text(
             "Explore, notice and keep memories. Earned badges stay yours when photos are archived.",
@@ -1271,11 +1337,13 @@ public final class LauncherActivity extends AppCompatActivity {
                   + Achievements.LEVELS[level + 1]
                   + ".",
               15,
-              FOREST,
+              Achievements.ink(level + 1),
               true));
       ProgressBar progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
       progress.setMax(next);
       progress.setProgress(earned.size());
+      progress.setProgressTintList(
+          android.content.res.ColorStateList.valueOf(Achievements.colour(level + 1)));
       content.addView(progress);
     }
     HorizontalScrollView tiers = new HorizontalScrollView(this);
@@ -1297,6 +1365,14 @@ public final class LauncherActivity extends AppCompatActivity {
                   renderMilestones();
                 }
               });
+      chip.setBackground(
+          ripple(i == achievementLayer ? Achievements.colour(i) : Achievements.background(i), 16));
+      chip.setTextColor(i == achievementLayer ? Achievements.onColour(i) : Achievements.ink(i));
+      chip.setContentDescription(
+          Achievements.LEVELS[i]
+              + ". "
+              + Achievements.LEVEL_DESCRIPTION[i]
+              + (i > level ? " Locked." : " Unlocked."));
       tierRow.addView(chip, new LinearLayout.LayoutParams(-2, dp(52)));
     }
     tiers.addView(tierRow);
@@ -1316,22 +1392,31 @@ public final class LauncherActivity extends AppCompatActivity {
         title(
             earnedOnly ? "Yours to keep" : Achievements.LEVELS[achievementLayer] + " discoveries",
             25,
-            FOREST));
+            Achievements.ink(achievementLayer)));
     space(content, 12);
     for (Achievements.Badge b : badges) {
       boolean won = earned.containsKey(b.id);
       if (earnedOnly ? !won : b.layer != achievementLayer) continue;
       LinearLayout tile = column();
       pad(tile, 17);
-      tile.setBackground(shape(won ? 0xffe6efd5 : 0xfff3ede2, 18));
+      GradientDrawable badgeBackground = shape(Achievements.background(b.layer), 18);
+      badgeBackground.setStroke(dp(won ? 2 : 1), Achievements.colour(b.layer));
+      tile.setBackground(badgeBackground);
       LinearLayout line = row();
       line.addView(
-          new IconView(this, won ? "milestones" : "leaf", won ? FOREST : 0xffa98b4b),
+          new IconView(this, won ? "milestones" : "leaf", Achievements.ink(b.layer)),
           new LinearLayout.LayoutParams(dp(32), dp(32)));
       TextView name = text(b.name, 18, FOREST, true);
       name.setPadding(dp(10), 0, 0, 0);
       line.addView(name, new LinearLayout.LayoutParams(0, -2, 1));
       tile.addView(line);
+      space(tile, 5);
+      tile.addView(
+          text(
+              Achievements.LEVELS[b.layer] + " · layer " + (b.layer + 1),
+              12,
+              Achievements.ink(b.layer),
+              true));
       space(tile, 8);
       tile.addView(text(b.description, 14, MUTED, false));
       if (won) {
@@ -1346,7 +1431,8 @@ public final class LauncherActivity extends AppCompatActivity {
         ProgressBar bar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
         bar.setMax(b.goal);
         bar.setProgress(b.progress);
-        bar.setProgressTintList(android.content.res.ColorStateList.valueOf(FOREST));
+        bar.setProgressTintList(
+            android.content.res.ColorStateList.valueOf(Achievements.colour(b.layer)));
         tile.addView(bar);
         tile.addView(text(b.progress + " / " + b.goal, 12, MUTED, false));
       }
@@ -1409,7 +1495,11 @@ public final class LauncherActivity extends AppCompatActivity {
     content.addView(identity);
     space(content, 12);
     accountRow(
-        content, "person", "Your avatar", "Choose a character and make it yours", this::editAvatar);
+        content,
+        "person",
+        "Make my avatar",
+        "A woodland cartoon from your photo, or a character made by you",
+        this::editAvatar);
     if (user == null)
       accountRow(
           content,
@@ -1417,6 +1507,13 @@ public final class LauncherActivity extends AppCompatActivity {
           "Sign in or register",
           "Sync your journal and join your trail circle",
           () -> showLogin(false));
+    accountHeading(content, "Your membership");
+    accountRow(
+        content,
+        "leaf",
+        "Photo allowance & subscription",
+        "Free and paid plans, trial, restore or manage in Google Play",
+        () -> startActivity(new Intent(this, SubscriptionActivity.class)));
     accountHeading(content, "Your community");
     accountRow(
         content,
@@ -1462,8 +1559,14 @@ public final class LauncherActivity extends AppCompatActivity {
     accountRow(
         content,
         "share",
-        "Export journal backup",
-        "Your photos, locations and permanent achievements",
+        "Download all photos & data (ZIP)",
+        "Your cloud journal and archive · always free",
+        this::chooseCloudZip);
+    accountRow(
+        content,
+        "journal",
+        "Device backup (JSON)",
+        "Includes photos waiting to upload · for smaller journals",
         () -> export.launch("my-trail-log-" + LocalDate.now() + ".json"));
     accountRow(
         content,
@@ -1624,7 +1727,12 @@ public final class LauncherActivity extends AppCompatActivity {
           String result;
           try {
             if (!repo.sync()) repo.enqueue();
-            result = "Journal refreshed. Remaining uploads retry when connected.";
+            String allowance =
+                TrailPreferences.of(this, owner).getString("photoAllowanceMessage", "");
+            result =
+                allowance.isEmpty()
+                    ? "Journal refreshed. Remaining uploads retry when connected."
+                    : allowance;
           } catch (Exception e) {
             repo.enqueue();
             result = "Waiting for a connection. Your saved photos are safe.";
@@ -1649,20 +1757,15 @@ public final class LauncherActivity extends AppCompatActivity {
             .count();
     return repo.session.get() == null
         ? "Saved on this phone · sign in to sync"
-        : pending == 0
-            ? "Journal up to date"
-            : pending + " discoveries waiting to sync or identify";
+        : !TrailPreferences.of(this, repo.owner()).getString("photoAllowanceMessage", "").isEmpty()
+            ? TrailPreferences.of(this, repo.owner()).getString("photoAllowanceMessage", "")
+            : pending == 0
+                ? "Journal up to date"
+                : pending + " discoveries waiting to sync or identify";
   }
 
   private void editAvatar() {
-    AvatarPicker.show(
-        this,
-        TrailPreferences.avatar(this, repo.owner()),
-        value -> {
-          TrailPreferences.avatar(this, repo.owner(), value);
-          repo.enqueue();
-          showAccount();
-        });
+    avatarStudio.show(TrailPreferences.avatar(this, repo.owner()));
   }
 
   private void refreshWeather() {
@@ -1873,11 +1976,28 @@ public final class LauncherActivity extends AppCompatActivity {
             16,
             FOREST,
             false));
+    space(form, 12);
+    form.addView(
+        text(
+            "Deleting My Trail Log does not cancel a Google Play subscription. Cancel it in Google"
+                + " Play to prevent future renewal charges. You can still delete your account now.",
+            15,
+            FOREST,
+            true));
+    space(form, 8);
+    form.addView(
+        button(
+            "Manage or cancel in Google Play",
+            false,
+            () ->
+                openReference(
+                    "https://play.google.com/store/account/subscriptions?package=com.field.logger")));
+    space(form, 12);
     labeled(form, "Password", password);
     AlertDialog dialog =
         new AlertDialog.Builder(this)
             .setTitle("Delete your account?")
-            .setView(form)
+            .setView(scroll(form))
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Delete account", null)
             .create();
@@ -1989,6 +2109,68 @@ public final class LauncherActivity extends AppCompatActivity {
     body.addView(scroll(content), new FrameLayout.LayoutParams(-1, -1));
   }
 
+  private void tryCloserLook(Observation record, TextView action) {
+    boolean firstIdentification = record.data.optJSONObject("identification") == null;
+    String retryLabel = firstIdentification ? "Try again" : "Try a closer look";
+    JSONObject account = repo.session.get();
+    if (account == null) {
+      message("Sign in before retrying identification. Your photo stays saved on this phone.");
+      return;
+    }
+    String owner = repo.owner(),
+        cookie = account.optString("cookie"),
+        key = owner + ":" + record.id();
+    if (!record.owner.equals(owner) || !CLOSER_REVIEWS.add(key)) return;
+    action.setEnabled(false);
+    action.setText(firstIdentification ? "Identifying this photo…" : "Reviewing the details…");
+    Repository.IO.execute(
+        () -> {
+          String notice;
+          try {
+            JSONObject identification = repo.api.identifyCloser(record.id(), cookie);
+            if (!owner.equals(repo.owner())) return;
+            repo.db.mergeAnalysis(record.id(), owner, identification);
+            JSONObject recognition = identification.optJSONObject("recognition");
+            notice =
+                recognition != null && "tentative".equals(recognition.optString("mode"))
+                    ? "A closer review is unavailable right now. The suggested identity remains"
+                        + " tentative."
+                    : recognition != null && "closer".equals(recognition.optString("mode"))
+                        ? "Closer review finished. Check the visible features before confirming a"
+                            + " species."
+                        : firstIdentification
+                            ? "Your suggested identity is ready. Check the visible features before"
+                                + " confirming a species."
+                            : "Your current suggestion is refreshed. Check the visible features"
+                                + " before confirming a species.";
+          } catch (Api.Failure e) {
+            notice =
+                e.status == 404
+                    ? "This photo is not in your cloud journal yet. Use Sync now before retrying"
+                        + " identification."
+                    : Repository.identificationMessage(e);
+          } catch (Exception e) {
+            notice =
+                "Identification could not finish. Your saved photo and any current suggestion"
+                    + " are kept.";
+          } finally {
+            CLOSER_REVIEWS.remove(key);
+          }
+          String result = notice;
+          runOnUiThread(
+              () -> {
+                if (isFinishing() || isDestroyed() || !owner.equals(repo.owner())) return;
+                action.setEnabled(true);
+                action.setText(retryLabel);
+                if (screen.equals("detail") && selectedId.equals(record.id())) {
+                  Observation updated = repo.db.find(record.id());
+                  if (updated != null) showDetail(updated);
+                  message(result);
+                } else Toast.makeText(this, result, Toast.LENGTH_LONG).show();
+              });
+        });
+  }
+
   private void importJournal(Uri uri) {
     String owner = repo.owner();
     async(
@@ -2004,33 +2186,96 @@ public final class LauncherActivity extends AppCompatActivity {
     String owner = repo.owner();
     async(
         () -> {
-          JSONObject backup = new JSONObject();
-          Observation.put(backup, "format", "fieldnotes-backup-v1");
-          Observation.put(backup, "exportedAt", Instant.now().toString());
-          JSONArray rows = new JSONArray();
-          for (Observation r : repo.db.list(owner)) {
-            JSONObject item = Observation.copy(r.data);
-            try (InputStream in = new FileInputStream(r.photo)) {
-              Observation.put(
-                  item,
-                  "photo",
-                  "data:image/jpeg;base64,"
-                      + android.util.Base64.encodeToString(
-                          Api.read(in, 4 * 1024 * 1024), android.util.Base64.NO_WRAP));
-            }
-            rows.put(item);
-          }
-          Observation.put(backup, "observations", rows);
-          JSONObject achievements = new JSONObject();
-          for (Map.Entry<String, String> b : repo.db.earned(owner).entrySet())
-            Observation.put(achievements, b.getKey(), b.getValue());
-          Observation.put(backup, "achievements", achievements);
           try (OutputStream out = getContentResolver().openOutputStream(uri, "wt")) {
             if (out == null) throw new IOException("Could not open the backup destination.");
-            out.write(backup.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            JournalBackup.write(
+                out, Instant.now().toString(), repo.db.list(owner), repo.db.earned(owner));
+          } catch (Exception e) {
+            try {
+              android.provider.DocumentsContract.deleteDocument(getContentResolver(), uri);
+            } catch (Exception ignored) {
+            }
+            throw e;
           }
         },
         () -> message("Journal exported, including photos and GPS."));
+  }
+
+  private void chooseCloudZip() {
+    if (zipDownloading) {
+      message("Your ZIP is downloading. You can keep using your journal while it finishes.");
+      return;
+    }
+    JSONObject account = repo.session.get();
+    if (account == null) {
+      message(
+          "Sign in to download your cloud journal. Device backup includes photos saved only on this"
+              + " phone.");
+      return;
+    }
+    long pending = repo.db.list(repo.owner()).stream().filter(r -> r.pending).count();
+    String description =
+        "Your uploaded photos, archive, exact saved GPS, notes, achievements and account data "
+            + "are included. This is always free, on every plan."
+            + (pending > 0
+                ? "\n\n"
+                    + pending
+                    + " photos or edits are waiting to sync. Use Sync now first, or save a Device"
+                    + " backup (JSON) to include data held only on this phone."
+                : "");
+    new AlertDialog.Builder(this)
+        .setTitle("Download photos & data")
+        .setMessage(description)
+        .setPositiveButton(
+            "Choose where to save",
+            (d, w) -> {
+              zipExportOwner = repo.owner();
+              zipExport.launch("my-trail-log-" + LocalDate.now() + ".zip");
+            })
+        .setNegativeButton("Cancel", null)
+        .show();
+  }
+
+  private void exportCloudZip(Uri uri) {
+    JSONObject account = repo.session.get();
+    if (account == null || !repo.owner().equals(zipExportOwner)) {
+      try {
+        android.provider.DocumentsContract.deleteDocument(getContentResolver(), uri);
+      } catch (Exception ignored) {
+      }
+      message("Sign in to the same account before downloading its journal.");
+      return;
+    }
+    zipDownloading = true;
+    String owner = repo.owner(), cookie = account.optString("cookie");
+    Toast.makeText(this, "Downloading your free ZIP. You can keep exploring.", Toast.LENGTH_LONG)
+        .show();
+    Repository.IO.execute(
+        () -> {
+          String result;
+          try (OutputStream out = getContentResolver().openOutputStream(uri, "wt")) {
+            if (out == null) throw new IOException("Could not open the chosen destination.");
+            long bytes = repo.api.exportZip(cookie, out);
+            if (bytes == 0) throw new IOException("The export was empty. Please try again.");
+            result = "Your photos and cloud journal data are saved as ZIP, including the archive.";
+          } catch (Exception e) {
+            try {
+              android.provider.DocumentsContract.deleteDocument(getContentResolver(), uri);
+            } catch (Exception ignored) {
+            }
+            result =
+                e instanceof Api.Failure
+                    ? e.getMessage()
+                    : "Your ZIP download did not finish. Check your connection and available"
+                        + " storage, then try again. Your journal is safe.";
+          }
+          zipDownloading = false;
+          String report = result;
+          runOnUiThread(
+              () -> {
+                if (!isFinishing() && !isDestroyed() && owner.equals(repo.owner())) message(report);
+              });
+        });
   }
 
   private void importPhoto(Uri uri) {

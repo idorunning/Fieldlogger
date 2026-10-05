@@ -16,6 +16,7 @@
             <intent-filter android:autoVerify="true"><action android:name="android.intent.action.VIEW"/><category android:name="android.intent.category.DEFAULT"/><category android:name="android.intent.category.BROWSABLE"/><data android:scheme="https" android:host="fieldlogger.co.uk" android:path="/"/><data android:scheme="https" android:host="fieldlogger.co.uk" android:path="/invite"/></intent-filter>
         </activity>
         <activity android:name=".CommunityActivity" android:exported="false" android:windowSoftInputMode="adjustResize"/>
+        <activity android:name=".SubscriptionActivity" android:exported="false"/>
         <provider android:name="androidx.core.content.FileProvider" android:authorities="com.field.logger.files" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths"/></provider>
     </application>
 </manifest>

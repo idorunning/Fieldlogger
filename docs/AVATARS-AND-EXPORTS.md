@@ -1,0 +1,40 @@
+# Photo avatars and free data exports
+
+My Trail Log 2.4 includes **Make my avatar**. The member chooses or takes their own photograph and explicitly confirms permission to use it and send it to OpenAI for avatar processing. This is an optional profile feature, separate from the nature journal. It does not identify a person or verify identity.
+
+The native client resizes and pixel re-encodes the source as a JPEG, removing EXIF and GPS metadata. The service performs another real JPEG decode and pixel re-encode, rejects photos above 2 MiB or 1024 pixels on either side, and uses only transient request memory. The original is never added to the journal, written to the database or object storage, shared with members, placed in a retry queue, or logged. OpenAI receives the cleaned photograph to generate the illustration; the provider's API data handling and retention terms apply. Do not promise that every provider-side copy is instantly deleted.
+
+Generated avatars use a consistent, visibly illustrated woodland watercolour style. The output also passes a separate AI check for a suitable non-photographic portrait, unsafe content and uncertainty before the profile is activated. AI checks can make mistakes; report unsuitable results to support. Only the checked generated cartoon is stored and served to signed-in members, subject to blocking rules. Sensitive metadata is removed from generated PNGs. The public descriptor contains a server-derived image route and generated revision, never the source photograph or a client-controlled external URL. Replacing the avatar deletes the previous generated asset; deleting the account removes stored generated assets.
+
+One initial processing attempt is available for a free account. An active, server-verified paid subscription or its trial provides one attempt per UTC calendar month. An attempt is reserved atomically before provider processing, and may be used even when processing fails or times out. Source validation, an unavailable configured service or a budget circuit that stops processing before any provider call does not use the allowance. Explicit request UUIDs prevent transport retries from starting a second generation. Concurrent requests are locked, and coarse hashed network rate limits also apply. No generation runs automatically in the background. Both paid generation and the style check reserve provider spend before sending their requests, with a separate avatar account budget and a persistent global daily circuit; failed or uncertain paid calls retain their conservative spend reservation.
+
+## API contract
+
+- `GET /api/avatar`: current avatar, service availability, remaining attempts, period and readable allowance description.
+- `POST /api/avatar/photo`: multipart `photo` (`image/jpeg`), `consent=true`, and a fresh UUID `requestId` for each deliberate processing attempt. Retain that UUID if retrying an uncertain transport result.
+- `GET /api/avatar/image?revision=<UUID>`: the member's current generated avatar.
+- `GET /api/social/users/<member UUID>/avatar/image?revision=<UUID>`: another member's current generated avatar, with authentication and blocking checks. Old or invented revisions return unavailable.
+- `GET /api/export`: a free, private ZIP download for the signed-in account. It is available to free, cancelled, suspended and over-allowance accounts without verifying a purchase.
+- `GET /api/plans`: public finalised plan limits, UK price catalogue and checkout readiness; it does not prove an individual Google offer is eligible.
+- `GET /api/billing`: authenticated server membership and usage, including verification readiness; client preferences cannot grant entitlement.
+- `POST /api/observations/<photo UUID>/identify`: authenticated, same-origin identification for an owned saved photograph. Completed unchanged results/stages are reused. An explicit `?closer=1` request can reconsider a completed tentative result within the remaining review/spending limits; no automatic loop retries a charged failed review.
+
+## Complete cloud journal export
+
+The ZIP includes all currently stored private photo originals, including archived discoveries, the current generated avatar, a machine-readable `journal.json`, and an `export-status.json` that lists any unavailable originals. Filenames use stable discovery UUIDs; dates, archival state, GPS, place names, notes, identifications, sources and other journal fields remain in JSON. The export also includes the member's profile, permanent achievements, their own publication and sharing-recipient data, follows, acorns given, saved places, reports made, safe subscription and allowance history, processing history and account access records. `identificationStageHistory` contains owner-only completed simple/strong analysis snapshots, retaining validated results for retry recovery; these private caches are removed with their photo/account. It excludes password material, session/invitation tokens, encrypted payment credentials and other members' private account details. Recipient addresses appear only where this member selected them for their own private sharing list.
+
+Photos still waiting to sync on a phone cannot appear in a cloud export. Sync that device and export again. The native app also retains its local journal backup/export facilities. The archive contains precise saved GPS and private notes, so members should treat it as private.
+
+The service streams uncompressed ZIP64 entries with backpressure and a per-file checksum. It never loads all photos or the complete journal JSON into one buffer. ZIP64 supports personal archives above 4 GiB. Cancelling a download closes the current object stream. Fixed owner-scoped database projections and UUID-derived original object keys prevent another member's files or authentication/billing secrets from entering the archive. A download consumes no photo allowance.
+
+## Recognition and allowances
+
+Nature recognition uses an efficient first pass and at most one automatic stronger **Closer Look** for harder/uncertain results when allowance and service budgets permit. Free has 100 photos/5 Closer Looks per UTC month; Plus has 150/30 at £5.99/month; Premium has 300/60 at £11.99/month. Premium annual is £119.99/year with 300/60 per UTC month, a verified paid-year base ceiling of 3,600/720, and additional paid-year bonuses of 150 photos/30 Closer Looks. Eligible one-month Google Play trials have the selected plan's photo/Closer Look limits as whole-trial totals and no annual bonuses. Checkout remains disabled until Google setup and real lifecycle checks are complete.
+
+A provider-submitted Closer Look attempt consumes its allowance even if the review fails. Completed stage caches avoid duplicate paid processing after an interrupted final save. Ordinary retries reuse the completed result; an explicit supported re-review request must still satisfy allowance and spending limits. When no review is possible, the result remains broad/tentative with its uncertainty. Confidence labels are not calibrated accuracy. Private stage snapshots are account data, not prompts, credentials or marketing profiles.
+
+## Operational checks
+
+The image model is configured through `OPENAI_AVATAR_MODEL`, defaulting to `gpt-image-2.5-sunburst`, with low quality, one opaque PNG and square 1024-pixel output. The owner must enable this model and image-edit permissions in the existing server-side OpenAI project before successful live generations are possible. Image outputs are capped at 3 MiB, matching the native image loader. Provider bodies and credentials are never reflected in failure messages.
+
+`tests/avatar-export.test.ts` checks server-derived generated URLs and private retry IDs, free/paid allowance periods, actual SQLite quota reservations, fail-closed style decisions, real JPEG sanitisation, generated PNG CRC and metadata sanitisation, independently read ZIP64 contents/checksums, stream cancellation and filename traversal rejection. Full authenticated end-to-end checks are also required after migrations and route wiring.

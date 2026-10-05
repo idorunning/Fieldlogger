@@ -44,6 +44,7 @@ export type Identification = {
   analysedAt: string;
   taxonKey?: number;
   specialist?: { name: string; score: number };
+  recognition?: {mode:'quick'|'closer'|'tentative';reviewReasons:string[];model?:string};
 };
 export type Observation = {
   id: string;
@@ -137,69 +138,4 @@ export function getStats(records: Observation[]) {
     months: new Set(records.map((r) => r.localDate.slice(0, 7))).size,
   };
 }
-export function getAchievements(records: Observation[]) {
-  const s = getStats(records),
-    n = Object.values(s.counts).filter(Boolean).length;
-  return [
-    {
-      name: "First wonder",
-      description: "Save your very first discovery.",
-      progress: Math.min(s.total, 1),
-      goal: 1,
-      icon: "sparkles",
-    },
-    {
-      name: "A little of everything",
-      description: "Notice four different kinds of things.",
-      progress: Math.min(n, 4),
-      goal: 4,
-      icon: "compass",
-    },
-    {
-      name: "Botanical beginnings",
-      description: "Meet five different plant or flower species.",
-      progress: Math.min(
-        s.species.filter((x) => ["plants", "flowers"].includes(x.category))
-          .length,
-        5,
-      ),
-      goal: 5,
-      icon: "leaf",
-    },
-    {
-      name: "Small worlds",
-      description: "Photograph five bugs or fungi.",
-      progress: Math.min(s.counts.bugs + s.counts.fungi, 5),
-      goal: 5,
-      icon: "bug",
-    },
-    {
-      name: "New corners",
-      description: "Make discoveries in three different areas.",
-      progress: Math.min(s.places, 3),
-      goal: 3,
-      icon: "map",
-    },
-    {
-      name: "Through the seasons",
-      description: "Collect discoveries in four different months.",
-      progress: Math.min(s.months, 4),
-      goal: 4,
-      icon: "sun",
-    },
-    {
-      name: "Early bird",
-      description: "Save a discovery before 9 am.",
-      progress: records.some((r) => r.localHour < 9) ? 1 : 0,
-      goal: 1,
-      icon: "bird",
-    },
-    {
-      name: "Curious collector",
-      description: "Get to know twenty different species.",
-      progress: Math.min(s.species.length, 20),
-      goal: 20,
-      icon: "award",
-    },
-  ];
-}
+export {evaluateAchievements as getAchievements} from "./achievements";

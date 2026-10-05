@@ -46,7 +46,6 @@ import {
   ImagePlus,
   CircleHelp,
   CheckCheck,
-  KeyRound,
 } from "lucide-react";
 import {
   categories,
@@ -63,6 +62,7 @@ import {
   fillMissingPlaces,
   saveLocal,
   syncRecords,
+  identifyOne,
   requestPersistentStorage,
   getMeta,
   setMeta,
@@ -71,7 +71,11 @@ import { lookupPlace } from "@/lib/place";
 import { preparePhoto, locate, localDate } from "@/lib/photo";
 import { useAuth } from "./AuthProvider";
 import MapView from "./MapView";
-import ApiKeySettings from "./ApiKeySettings";
+import MembershipPanel from "./MembershipPanel";
+import AvatarMaker from "./AvatarMaker";
+import AchievementGallery from "./AchievementGallery";
+import {collectLocalAchievements,syncAchievementLedger} from "@/lib/achievement-local";
+import type {AchievementLedger} from "@/lib/achievements";
 import DiscoveryHome from "./DiscoveryHome";
 type View = "discover" | "journal" | "map" | "collection" | "achievements" | "sources";
 const icons = {
@@ -265,6 +269,7 @@ function Login({ onClose }: { onClose: () => void }) {
               ? "Sign in"
               : "Create my account"}
         </button>
+        {mode === "register" && <p className="small muted">By creating an account, you confirm you are at least 16 and agree to the <a href="/terms" target="_blank" rel="noopener noreferrer">terms</a>. Read the <a href="/privacy" target="_blank" rel="noopener noreferrer">privacy policy</a>.</p>}
         {message && (
           <p className="notice error" role="alert">
             {message}
@@ -491,11 +496,13 @@ function Detail({
   onClose,
   onUpdate,
   toast,
+  onCloserLook,
 }: {
   record: Observation;
   onClose: () => void;
   onUpdate: (r: Observation) => Promise<void>;
   toast: (text: string) => void;
+  onCloserLook?: () => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false),
     [name, setName] = useState(record.name),
@@ -506,7 +513,15 @@ function Detail({
     [includeLocation, setIncludeLocation] = useState(false),
     [sharing, setSharing] = useState(false),
     [confirmed, setConfirmed] = useState(record.confirmed);
+  const [reviewing, setReviewing] = useState(false), [reviewError, setReviewError] = useState("");
   const identification = record.identification;
+  async function closerLook() {
+    if (!onCloserLook || reviewing) return;
+    setReviewing(true); setReviewError("");
+    try { await onCloserLook(); }
+    catch (error) { setReviewError(error instanceof Error ? error.message : "A closer review is unavailable. Please try again later."); }
+    finally { setReviewing(false); }
+  }
   async function share(withInfo: boolean) {
     setSharing(true);
     try {
@@ -546,9 +561,7 @@ function Detail({
         ctx.font = "27px sans-serif";
         wrap(
           ctx,
-          identification?.summary ||
-            record.note ||
-            "Something interesting from a day outdoors.",
+          [identification?.summary || record.note || "Something interesting from a day outdoors.", identification?.interestingFact].filter(Boolean).join(" "),
           60,
           1130,
           960,
@@ -650,11 +663,15 @@ function Detail({
             <div className="ai-note">
               <div className="section-label">
                 <Sparkles size={16} /> A field companion’s suggestion{" "}
+                {identification.recognition?.mode === "tentative" && <span className="confidence low">Tentative</span>}
                 <span className={"confidence " + identification.confidence}>
                   {identification.confidence} confidence
                 </span>
               </div>
               <p>{identification.summary}</p>
+              {identification.interestingFact && <div><h3>A little wonder</h3><p>{identification.interestingFact}</p></div>}
+              {identification.recognition?.mode === "tentative" && <p className="small muted">This suggestion remains uncertain. A closer review was unavailable or could not settle the identity; check the clues and references before confirming it.</p>}
+              {identification.recognition?.mode === "tentative" && onCloserLook && <div className="form-stack"><button className="button secondary" type="button" onClick={() => void closerLook()} disabled={reviewing || record.syncState !== "synced"}><Sparkles size={18}/>{reviewing ? "Taking a closer look…" : "Try a closer look"}</button><p className="small muted">Uses one closer-review attempt if available, including if processing cannot finish. Your photo allowance is unchanged.</p>{reviewError && <p className="notice error" role="alert">{reviewError}</p>}</div>}
               <h3>Look for these clues</h3>
               <ul>
                 {identification.identifyingFeatures.map((x, i) => (
@@ -713,7 +730,7 @@ function Detail({
                 </p>
               )}
               <p className="small muted">
-                {identification.provider} ·{" "}
+                {identification.provider.startsWith("OpenAI") ? "Smart AI" : identification.provider} ·{" "}
                 {dateLabel(identification.analysedAt)}. Reference matches
                 support background reading; they do not verify your photo.
               </p>
@@ -733,6 +750,7 @@ function Detail({
           </div>
         )}
         {record.error && <p className="notice error">{record.error}</p>}
+        {onCloserLook && identification?.recognition?.mode !== "tentative" && (record.analysisState === "error" || (!identification && !!record.error)) && <div className="form-stack"><button className="button secondary" type="button" onClick={() => void closerLook()} disabled={reviewing || record.syncState !== "synced"}><RefreshCw size={18}/>{reviewing ? "Retrying identification…" : "Retry identification"}</button><p className="small muted">Retries processing when you choose. A closer review, if needed, uses your review allowance even if it fails. No additional photo slot is used.</p>{reviewError && <p className="notice error" role="alert">{reviewError}</p>}</div>}
         {record.note && (
           <section className="personal-note">
             <h3>Your field note</h3>
@@ -908,9 +926,12 @@ function download(blob: Blob, name: string) {
 export default function Fieldnotes() {
   const { user, loading: authLoading, offlineSession, signOut } = useAuth();
   const owner = user?.id || "guest";
+  const currentOwner = useRef(owner);
+  currentOwner.current = owner;
   const [view, setView] = useState<View>("discover"),
     [records, setRecords] = useState<Observation[]>([]),
     [archivedRecords, setArchivedRecords] = useState<Observation[]>([]),
+    [earnedBadges, setEarnedBadges] = useState<AchievementLedger>({}),
     [archiveOpen, setArchiveOpen] = useState(false),
     [category, setCategory] = useState<Category | "all">("all"),
     [query, setQuery] = useState(""),
@@ -919,7 +940,10 @@ export default function Fieldnotes() {
     [filters, setFilters] = useState(false),
     [login, setLogin] = useState(false),
     [accountOpen, setAccountOpen] = useState(false),
-    [keySettings, setKeySettings] = useState(false),
+    [membershipOpen, setMembershipOpen] = useState(false),
+    [avatarOpen, setAvatarOpen] = useState(false),
+    [avatarUrl, setAvatarUrl] = useState(""),
+    [avatarVersion, setAvatarVersion] = useState(0),
     [selected, setSelected] = useState<string | null>(null),
     [draft, setDraft] = useState<Draft | null>(null),
     [busy, setBusy] = useState(false),
@@ -947,8 +971,11 @@ export default function Fieldnotes() {
   const refresh = useCallback(async () => {
     try {
       const all = await listLocal(owner);
+      const earned = await collectLocalAchievements(owner, all);
+      if (currentOwner.current !== owner) return;
       setRecords(all.filter(r => !r.archived));
       setArchivedRecords(all.filter(r => r.archived));
+      setEarnedBadges(earned);
       setReady(true);
     } catch {
       toast(
@@ -962,6 +989,8 @@ export default function Fieldnotes() {
     setSyncing(true);
     try {
       await syncRecords(owner, () => void refresh());
+      await syncAchievementLedger(owner);
+      await refresh();
     } catch {
     } finally {
       syncLock.current = false;
@@ -997,7 +1026,6 @@ export default function Fieldnotes() {
     };
   }, [sync, authLoading]);
   useEffect(() => {
-    if (window.location.hash === "#api-key") setKeySettings(true);
     const launchView = new URLSearchParams(window.location.search).get("view");
     if (["discover", "journal", "map", "collection", "achievements", "sources"].includes(launchView || "")) setView(launchView as View);
   }, []);
@@ -1007,6 +1035,12 @@ export default function Fieldnotes() {
     else url.searchParams.set("view", view);
     window.history.replaceState(null, "", url.pathname + url.search + url.hash);
   }, [view]);
+  useEffect(() => {
+    setAvatarUrl(""); if (!user) return;
+    const controller = new AbortController();
+    fetch("/api/avatar", {cache:"no-store",signal:controller.signal}).then(async response => {if (!response.ok) return;const data=await response.json() as {avatar?:{imageUrl?:string}};if(typeof data.avatar?.imageUrl==="string" && /^\/api\/avatar\/image\?revision=[a-f0-9-]{36}$/i.test(data.avatar.imageUrl))setAvatarUrl(data.avatar.imageUrl);}).catch(()=>{});
+    return()=>controller.abort();
+  }, [user?.id, avatarVersion]);
   const refreshStatus = useCallback(() => {
     fetch("/api/status", { cache: "no-store" })
       .then(
@@ -1097,7 +1131,7 @@ export default function Fieldnotes() {
     return () => lifecycle.abort();
   }, []);
   const stats = useMemo(() => getStats(records), [records]),
-    achievements = useMemo(() => getAchievements(records), [records]);
+    achievements = useMemo(() => getAchievements([...records, ...archivedRecords]), [records, archivedRecords]);
   const filtered = useMemo(
     () =>
       records.filter(
@@ -1252,11 +1286,12 @@ export default function Fieldnotes() {
               format: "fieldnotes-backup-v1",
               exportedAt: new Date().toISOString(),
               observations: out,
+              achievements: earnedBadges,
             }),
           ],
           { type: "application/json" },
         ),
-        `fieldlogger-${localDate(new Date())}.json`,
+        `my-trail-log-${localDate(new Date())}.json`,
       );
       toast(
         "Journal backup downloaded, including photos and GPS. Keep it somewhere private.",
@@ -1285,7 +1320,7 @@ export default function Fieldnotes() {
   return (
     <div className={"app-shell view-" + view}>
       <aside className="sidebar">
-        <a href="/" className="brand">
+        <a href="/journal" className="brand">
           <span className="brand-mark">
             <Leaf size={25} />
           </span>
@@ -1355,14 +1390,6 @@ export default function Fieldnotes() {
             {nav.find((x) => x.id === view)?.label || "Field guide"}
           </div>
           <div className="topbar-actions">
-            <button
-              className="icon-button"
-              aria-label="API key settings"
-              title="API key settings"
-              onClick={() => setKeySettings(true)}
-            >
-              <KeyRound size={20} />
-            </button>
             <span className="sync-status">
               {!online ? (
                 <>
@@ -1396,7 +1423,7 @@ export default function Fieldnotes() {
             >
               {user ? (
                 <span className="avatar">
-                  {user.name.slice(0, 1).toUpperCase()}
+                  {avatarUrl ? <img src={avatarUrl} alt="Your illustrated avatar"/> : user.name.slice(0, 1).toUpperCase()}
                 </span>
               ) : (
                 <LogIn size={18} />
@@ -1431,6 +1458,7 @@ export default function Fieldnotes() {
             </button>
           </div>}
           {view === "discover" && <DiscoveryHome records={records} online={online} busy={busy} onGallery={() => galleryRef.current?.click()} onJournal={() => setView("journal")} onOpen={setSelected} />}
+          {online && [...records, ...archivedRecords].some(record => record.error) && <div className="offline-banner" role="status"><CloudUpload size={18}/><span>{[...records, ...archivedRecords].find(record => record.error)?.error} Your photos remain saved on this device.</span>{user && <button className="button secondary" onClick={() => setMembershipOpen(true)}>Membership</button>}</div>}
           {!online && view !== "discover" && (
             <div className="offline-banner">
               <WifiOff size={18} />
@@ -1891,76 +1919,7 @@ export default function Fieldnotes() {
               </section>
             </>
           )}
-          {view === "achievements" && (
-            <>
-              <div className="achievement-banner">
-                <span>
-                  <Award size={44} />
-                </span>
-                <div>
-                  <p className="section-label">THE JOY IS IN THE NOTICING</p>
-                  <h2>
-                    {achievements.filter((a) => a.progress === a.goal).length}{" "}
-                    little milestones. A world still to see.
-                  </h2>
-                  <p>
-                    Collect new kinds of things, visit new corners, and see
-                    familiar places at different times.
-                  </p>
-                </div>
-              </div>
-              <div className="achievement-grid">
-                {achievements.map((a, i) => {
-                  const Icon = [
-                      Sparkles,
-                      Compass,
-                      Leaf,
-                      Bug,
-                      MapIcon,
-                      Sun,
-                      Bird,
-                      Award,
-                    ][i],
-                    unlocked = a.progress === a.goal;
-                  return (
-                    <article
-                      key={a.name}
-                      className={"achievement " + (unlocked ? "unlocked" : "")}
-                    >
-                      <div className="badge-icon">
-                        <Icon size={35} />
-                        {unlocked && (
-                          <span>
-                            <Check size={12} />
-                          </span>
-                        )}
-                      </div>
-                      <span className="badge-state">
-                        {unlocked ? "DISCOVERED" : "STILL TO DISCOVER"}
-                      </span>
-                      <h2>{a.name}</h2>
-                      <p>{a.description}</p>
-                      <div
-                        className="progress-track"
-                        role="progressbar"
-                        aria-valuenow={a.progress}
-                        aria-valuemin={0}
-                        aria-valuemax={a.goal}
-                        aria-label={a.name}
-                      >
-                        <i
-                          style={{ width: `${(a.progress / a.goal) * 100}%` }}
-                        />
-                      </div>
-                      <small>
-                        {a.progress} of {a.goal}
-                      </small>
-                    </article>
-                  );
-                })}
-              </div>
-            </>
-          )}
+          {view === "achievements" && <AchievementGallery badges={achievements} ledger={earnedBadges}/>}
           {view === "sources" && (
             <div className="guide">
               <section className="guide-intro">
@@ -1981,8 +1940,8 @@ export default function Fieldnotes() {
                   text: "Suggests an identity, visible clues and alternatives, using capture time and approximate location. Confidence is qualitative. Your photo and nearby coordinates are sent only when you are signed in and connected.",
                   url: "https://platform.openai.com/docs/guides/images-vision",
                   state: status.identification
-                    ? "Key saved · test in API key settings"
-                    : "Add a key in API key settings",
+                    ? "Shared identification service"
+                    : "Service temporarily unavailable",
                 },
                 {
                   name: "Wikipedia",
@@ -2116,9 +2075,7 @@ export default function Fieldnotes() {
             <span>
               <Leaf size={14} /> Made for wandering minds.
             </span>
-            <button onClick={() => setKeySettings(true)}>
-              API key settings <KeyRound size={14} />
-            </button>
+            <a href="/">About My Trail Log</a>
             <button onClick={() => setView("sources")}>
               Sources & offline help <CircleHelp size={14} />
             </button>
@@ -2184,9 +2141,13 @@ export default function Fieldnotes() {
       {accountOpen && user && <Dialog title="Your journal" onClose={() => setAccountOpen(false)}>
         <h3>{user.name}</h3><p className="muted">{user.email}</p>
         <div className="account-actions form-stack">
-          <button className="button primary full" onClick={() => { setAccountOpen(false); setKeySettings(true); }}><Sparkles size={22} />Photo identification settings</button>
+          <button className="button secondary full" onClick={() => { setAccountOpen(false); setAvatarOpen(true); }}><Sparkles size={22} />Make my avatar</button>
+          <button className="button primary full" onClick={() => { setAccountOpen(false); setMembershipOpen(true); }}><Leaf size={22} />Membership & photo allowance</button>
+          <button className="button secondary full" onClick={() => void sync()} disabled={syncing || !online}><RefreshCw size={22} />{syncing ? "Syncing…" : "Sync now"}</button>
           <button className="button secondary full" onClick={() => { setAccountOpen(false); setArchiveOpen(true); }}><BookOpen size={22} />Archive · {archivedRecords.length}</button>
-          <button className="button secondary full" onClick={backup} disabled={!records.length && !archivedRecords.length}><Download size={22} />Export my journal</button>
+          <a className="button secondary full" href="/api/export"><Download size={22} />Download cloud photos & data · ZIP</a>
+          <p className="small muted">Free on every plan. Includes all synced cloud photos, Archive and available account data. Device-only and pending photos are in the local backup below.</p>
+          <button className="button secondary full" onClick={backup} disabled={!records.length && !archivedRecords.length}><Download size={22} />Back up this browser’s journal</button>
           <button className="button secondary full" onClick={() => { setAccountOpen(false); setView("sources"); }}><CircleHelp size={22} />Sources & offline help</button>
           <a className="button secondary full" href="/privacy">Privacy & your data</a>
           <a className="button secondary full" href="/delete-account">Delete account</a>
@@ -2203,32 +2164,8 @@ export default function Fieldnotes() {
         </div>)}
       </Dialog>}
       {login && <Login onClose={() => setLogin(false)} />}{" "}
-      {keySettings && !login && (
-        <Dialog title="API key settings" onClose={() => setKeySettings(false)}>
-          {user ? (
-            <ApiKeySettings
-              online={online}
-              onChanged={() => {
-                refreshStatus();
-                void sync();
-              }}
-            />
-          ) : (
-            <>
-              <p className="muted">
-                Sign in or create your private journal account before saving an
-                API key.
-              </p>
-              <button
-                className="button primary full"
-                onClick={() => setLogin(true)}
-              >
-                Sign in or create account
-              </button>
-            </>
-          )}
-        </Dialog>
-      )}
+      {membershipOpen && user && <Dialog title="Your membership" onClose={() => setMembershipOpen(false)}><MembershipPanel key={user.id}/></Dialog>}
+      {avatarOpen && user && <Dialog title="Make my avatar" onClose={() => setAvatarOpen(false)}><AvatarMaker key={user.id} onChanged={() => setAvatarVersion(value => value + 1)}/></Dialog>}
       {draft && (
         <Capture
           draft={draft}
@@ -2244,6 +2181,7 @@ export default function Fieldnotes() {
           onClose={() => setSelected(null)}
           onUpdate={update}
           toast={toast}
+          onCloserLook={user ? async () => { await identifyOne(owner, chosen.id, true); if (currentOwner.current === owner) await refresh(); } : undefined}
         />
       )}{" "}
       {notice && (

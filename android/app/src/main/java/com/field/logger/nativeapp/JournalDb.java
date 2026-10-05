@@ -220,7 +220,8 @@ public final class JournalDb extends SQLiteOpenHelper {
     if (old != null
         && (!old.owner.equals(owner) || old.pending || old.revision() > remote.optInt("revision")))
       return false;
-    save(new Observation(remote, owner, file, false, ""));
+    String error = old != null && remote.optJSONObject("identification") == null ? old.error : "";
+    save(new Observation(remote, owner, file, false, error));
     return true;
   }
 

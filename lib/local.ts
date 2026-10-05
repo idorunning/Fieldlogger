@@ -1,5 +1,6 @@
 import { lookupPlace } from "./place";
 import { openDB, type DBSchema } from "idb";
+import {mergeAchievementLedgers,validAchievementLedger} from "./achievements";
 import {
   type Observation,
   type User,
@@ -36,10 +37,13 @@ export async function setMeta(key: string, value: unknown) {
 }
 export async function adoptGuest(user: User) {
   const database = await db();
-  const tx = database.transaction("observations", "readwrite");
-  const guest = await tx.store.index("owner").getAll("guest");
+  const tx = database.transaction(["observations", "meta"], "readwrite");
+  const guest = await tx.objectStore("observations").index("owner").getAll("guest");
   for (const row of guest)
-    await tx.store.put({ ...row, owner: user.id, syncState: "pending" });
+    await tx.objectStore("observations").put({ ...row, owner: user.id, syncState: "pending" });
+  const guestBadges=validAchievementLedger(await tx.objectStore("meta").get("achievements:guest")),ownBadges=validAchievementLedger(await tx.objectStore("meta").get("achievements:"+user.id));
+  await tx.objectStore("meta").put(mergeAchievementLedgers(ownBadges,guestBadges),"achievements:"+user.id);
+  await tx.objectStore("meta").delete("achievements:guest");
   await tx.done;
 }
 export async function requestPersistentStorage() {
@@ -48,6 +52,27 @@ export async function requestPersistentStorage() {
   } catch {
     return false;
   }
+}
+export async function identifyOne(owner: string, id: string, closer = false) {
+  if (owner === "guest") throw new Error("Sign in to request a closer review.");
+  if (!navigator.onLine) throw new Error("Reconnect to request a closer review.");
+  const current = await fetch("/api/auth/me", { cache: "no-store" });
+  if (!current.ok || (await current.json() as {user?: User}).user?.id !== owner)
+    throw new Error("Sign in online to review this photo.");
+  const record = await (await db()).get("observations", id);
+  if (!record || record.owner !== owner || record.syncState !== "synced")
+    throw new Error("Sync this photo before requesting a closer review.");
+  const response = await fetch(`/api/observations/${encodeURIComponent(id)}/identify${closer ? "?closer=1" : ""}`, { method: "POST" });
+  const data = await response.json() as { identification?: Identification; error?: string };
+  if (!response.ok || !data.identification) throw new Error(data.error || "A closer review is unavailable. Your photo is still saved.");
+  const tx = (await db()).transaction("observations", "readwrite");
+  const latest = await tx.store.get(id);
+  if (latest?.owner === owner) await tx.store.put({
+    ...latest, identification: data.identification,
+    ...(latest.confirmed ? {} : {name: data.identification.name, scientificName: data.identification.scientificName, category: data.identification.category}),
+    analysisState: "complete", error: undefined,
+  });
+  await tx.done;
 }
 export async function syncRecords(owner: string, notify: () => void) {
   if (!navigator.onLine) return;
@@ -86,6 +111,9 @@ export async function syncRecords(owner: string, notify: () => void) {
           { method: "POST" },
         );
         if (response.status === 503) {
+          const data = await response.json() as { error?: string };
+          const latest = await (await db()).get("observations", record.id);
+          if (latest?.owner === owner) await saveLocal({ ...latest, error: data.error || "Identification is temporarily unavailable. Your photo is still saved." });
           notify();
           continue;
         }
@@ -158,6 +186,7 @@ export async function clearLocalAccount(owner: string) {
   const keys = await tx.objectStore("observations").index("owner").getAllKeys(owner);
   for (const key of keys) await tx.objectStore("observations").delete(key);
   await tx.objectStore("meta").delete("activeUser");
+  await tx.objectStore("meta").delete("achievements:"+owner);
   await tx.done;
 }
 

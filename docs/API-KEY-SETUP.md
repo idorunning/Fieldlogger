@@ -1,29 +1,24 @@
-# API-key settings
+# My Trail Log: private identification-service setup
 
-Open `/#api-key`, sign in or create a Field Logger journal account, and paste an OpenAI API key into the masked field. **Save key** explicitly enables the account's pending photo analysis. **Test connection** sends a small billed Responses request with the configured model. A successful save alone does not prove validity or permissions. The same screen replaces or removes a key. Removal does not revoke it at OpenAI.
+Ordinary members do not enter, view or maintain provider keys. The website and Android app use the same privately configured identification service; the key is never bundled in an APK/AAB or sent to clients. Manage provider permissions, rotation and billing through the private OpenAI project and the hosting platform's server-secret configuration.
 
-Keys that expire after 20 minutes are useful for a short test, but they remain credentials until expiry. Never send them in chat. Expired, revoked and invalid keys return an actionable message; photo storage and offline journaling keep working. Enter a replacement in settings to resume pending identification.
+## Active service and owner maintenance
 
-## Storage and access
+`getServiceKey` uses the server's `OPENAI_API_KEY` first. If absent, it uses the encrypted account key belonging to `SHARED_OPENAI_KEY_OWNER_ID`. Configure that value to an existing trusted operator account. Avoid operating a shared public application without one of these private service configurations.
 
-- The app-owned HttpOnly session is required for every settings operation. Writes and tests additionally require the exact same Origin. The website uses Field Logger password login; journal data and saved credentials belong only to their account.
-- Keys are submitted over the Site's HTTPS endpoint, then encrypted with AES-256-GCM and a fresh 96-bit nonce before the D1 write. The user ID and envelope version are authenticated encryption context, preventing copying an encrypted key between accounts.
-- `API_KEY_ENCRYPTION_KEY` is a base64-encoded random 32-byte server-only Sites secret. It is not the OpenAI key. It must never be committed or exposed via public variable prefixes, frontend code, runtime responses or logs. Do not replace it without migrating existing encrypted records; doing so makes them unreadable.
-- Credentials are decrypted only in server memory for requests to the fixed OpenAI API origin. Client GET responses report presence and update time only, never key material or key fragments.
-- The key field clears before submission, uses password masking, and has autocomplete, capitalization and spelling assistance disabled. No app code persists a key to browser storage, URLs, analytics, journal exports or logs. API responses are excluded from service-worker caches.
-- Removing a key deletes its active database record. Normal hosting database backup retention still applies. Remove/revoke it at OpenAI to invalidate any previous copy.
-- Identification uses only the authenticated account's saved key. No shared server key is used. An absent key pauses identification; an expired or rejected key requires replacement in settings.
+The legacy `/settings/openai-key` endpoint exposes no credential material through GET. Every mutation or connection test requires a signed-in account that exactly matches **both** `SHARED_OPENAI_KEY_OWNER_ID` and `COMMUNITY_ADMIN_USER_ID`; missing or mismatched configuration fails closed. Email addresses and new account registration do not grant this permission. Writes and tests additionally require the exact same Origin.
 
-## Local verification
+An owner connection test uses the active shared service key, GPT-6.1 Sol, a tiny known JPEG and a bounded complete response. It has a ten-second request limit, a conservative cost reservation and actual usage settlement. Passing this checks image-input connectivity; it does not establish species-identification accuracy or replace field-photo quality tests. A successful save alone does not prove provider permissions.
 
-The production encryption secret is separate from the deliberate fixture used for local tests. Start a local Worker preview with an isolated test-only `API_KEY_ENCRYPTION_KEY`, then run:
+## Storage and privacy
 
-```sh
-npm test
-TEST_ORIGIN=http://localhost:8787 node tests/api.integration.mjs
-node tests/key-settings.integration.mjs
-python tests/key-settings.browser.py
-python tests/browser.py
-```
+- `API_KEY_ENCRYPTION_KEY` is a base64-encoded random 32-byte server-only secret. It is separate from the provider key. Never replace it without migrating existing encrypted records.
+- Saved owner keys use AES-256-GCM with a fresh 96-bit nonce and authenticated owner/envelope context, preventing reuse of an encrypted envelope by another account.
+- Decryption occurs only in server memory for the fixed provider origin. Do not put credentials in public variables, browser storage, URLs, logs, analytics, screenshots or ZIP exports.
+- Presence responses contain no key or key fragments. Photo-analysis failures return generic service messages to members; safe status/category diagnostics stay in server logs.
+- Deleting an encrypted record does not revoke its credential at OpenAI, and an active `OPENAI_API_KEY` takes precedence over that record. Rotate/revoke at the provider and update the active private server configuration together.
+- Photo capture, existing private-journal access and exports remain available when identification is temporarily unavailable.
 
-The test files contain explicitly fake credentials and never call OpenAI. Test connection and an actual identification require the user's real key saved through their signed-in settings.
+## Verification
+
+`npm test` exercises encryption ownership/tampering, trusted-owner restrictions, generic member errors, image preprocessing and transactional spend safeguards using deliberate non-provider fixtures. Type checking and local tests never establish live provider access. Real owner connectivity and representative nature/people-safety tests must be performed privately with the configured service. Older key-settings browser/integration scripts describe the retired member-key UI and should not be treated as current production acceptance evidence.

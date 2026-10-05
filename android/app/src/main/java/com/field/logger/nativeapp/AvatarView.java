@@ -5,7 +5,7 @@ import android.graphics.*;
 import android.view.View;
 import org.json.JSONObject;
 
-/** Small original vector portraits; no photographs or external avatar service. */
+/** A consistent illustrated portrait. Generated images are cartoons, never source photographs. */
 public final class AvatarView extends View {
   public static final String[] KEYS = {
     "skin", "hair", "cut", "eyes", "expression", "glasses", "presentation", "pose", "outfit"
@@ -35,6 +35,8 @@ public final class AvatarView extends View {
     {"Forest", "Blue", "Gold", "Coral", "Purple", "Teal", "Pink", "Slate"}
   };
   private JSONObject avatar;
+  private Bitmap generated;
+  private int loadGeneration;
   private final Paint p = new Paint(3);
   private static final int[] SKIN = {
     0xffffdfcb, 0xffefc7a5, 0xffe2b18c, 0xffcb976b, 0xffb99370, 0xff9b684d, 0xff754b38, 0xff503427
@@ -54,8 +56,28 @@ public final class AvatarView extends View {
 
   public void update(JSONObject value) {
     avatar = value == null ? new JSONObject() : Observation.copy(value);
+    generated = null;
+    final int generation = ++loadGeneration;
     setContentDescription("Personalised explorer avatar");
     invalidate();
+    if (!"generated".equals(avatar.optString("kind"))) return;
+    JSONObject descriptor = Observation.copy(avatar);
+    android.content.Context app = getContext().getApplicationContext();
+    JSONObject user = new Session(app).get();
+    if (user == null || !AvatarImages.allowed(descriptor)) return;
+    String owner = user.optString("id", ""), cookie = user.optString("cookie", "");
+    if (owner.isEmpty() || cookie.isEmpty()) return;
+    Repository.IO.execute(
+        () -> {
+          Bitmap image = AvatarImages.load(app, owner, cookie, descriptor);
+          if (image == null) return;
+          post(
+              () -> {
+                if (generation != loadGeneration || !owner.equals(new Session(app).owner())) return;
+                generated = image;
+                invalidate();
+              });
+        });
   }
 
   private int v(String key, int count) {
@@ -74,6 +96,20 @@ public final class AvatarView extends View {
     float size = Math.min(getWidth(), getHeight());
     c.translate((getWidth() - size) / 2, (getHeight() - size) / 2);
     c.scale(size / 100, size / 100);
+    if (generated != null) {
+      Path clip = new Path();
+      clip.addCircle(50, 50, 48, Path.Direction.CW);
+      c.save();
+      c.clipPath(clip);
+      c.drawBitmap(generated, null, new RectF(2, 2, 98, 98), p);
+      c.restore();
+      p.setStyle(Paint.Style.STROKE);
+      p.setColor(0xffb7c7a1);
+      p.setStrokeWidth(2);
+      c.drawCircle(50, 50, 48, p);
+      c.restore();
+      return;
+    }
     p.setColor(0xffe9eddf);
     p.setStyle(Paint.Style.FILL);
     c.drawCircle(50, 50, 49, p);
