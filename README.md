@@ -4,7 +4,9 @@ A mobile-first personal countryside discovery journal: photograph something, sav
 
 ## Current status
 
-The web app is implemented and runs locally. Its private Sites identity is registered but **has not been published**. OpenAI key creation was approved in the conversation, but the secure picker has not delivered a key/account selection and the local secret destination still needs confirmation. There is no live OpenAI key in this checkout. Identification returns an explicit unavailable status until secure setup completes; it never invents a successful analysis.
+The web app includes private API-key settings at `/#api-key`. Sign in or create your journal account, paste your key into the masked field, and choose **Save key**, then **Test connection**. Keys can be replaced or removed here later. No key needs to be sent in chat. Identification remains unavailable until a working key is configured; the app never invents successful analysis.
+
+Account keys are encrypted with AES-256-GCM before storage. The encryption key is a Sites runtime secret, separate from the database, source and browser bundles. See `docs/API-KEY-SETUP.md` for operation and test coverage. A live OpenAI photo identification still needs the user's key.
 
 ## Included
 
@@ -12,6 +14,7 @@ The web app is implemented and runs locally. Its private Sites identity is regis
 - JPEG resize and EXIF removal, IndexedDB originals-as-resized, persistent-storage request, offline app shell.
 - Automatic foreground upload on reconnect, startup and visibility changes; Background Sync uploads when the browser supports them. Photos are saved before any network request.
 - Email/password registration, login, logout and account-scoped D1/R2 storage; adapted from the requested SEBP membership code. See `docs/SEBP-REUSE.md`.
+- Private API-key settings with masked entry, encrypted account-scoped storage, replacement/removal, connection testing and expiry guidance.
 - OpenAI Responses API identification with uncertainty, alternatives, capture context, visible clues, and a suggestion for looking closer.
 - Wikipedia extracts and GBIF scientific-name matching, cached with the discovery. Optional Pl@ntNet and BioCLIP adapters; no optional service has been provisioned.
 - Leaflet/OpenStreetMap map, category colours, accessible marker buttons and a corresponding list; search across names, notes and places; category and date filters.
@@ -25,6 +28,7 @@ The web app is implemented and runs locally. Its private Sites identity is regis
 npm ci
 npm run db:generate # only after changing db/schema.ts
 npx wrangler d1 execute DB --local --config wrangler.dev.jsonc --file drizzle/0000_brainy_bullseye.sql
+npx wrangler d1 execute DB --local --config wrangler.dev.jsonc --file drizzle/0001_strange_virginia_dare.sql
 npm run dev
 ```
 
@@ -54,7 +58,7 @@ Server secrets belong in ignored local environment files through approved secure
 
 The existing private Site is `appgprj_6ac2d981043081919ee03d9ff57bf87e`; reuse `.openai/hosting.json`. Do not register a replacement. Logical storage bindings are `DB` and `BUCKET`. Production build emits `dist/server/index.js`, `dist/client`, and `dist/.openai` including migrations.
 
-The Sites skill's local helper scripts were not installed in this environment. SEBP source was retrieved over its authenticated source repository and used as a retained build scaffold. Publication still needs exact-source push and a validated archive, then a successful native Sites deployment result. Registration alone is not a live URL.
+The Sites skill's local helper scripts were not installed in this environment. SEBP source was retrieved over its authenticated source repository and used as a retained build scaffold. Publication uses an exact-source push and validated build archive followed by native Sites deployment. Registration alone is not a live URL; check the native deployment result for the published status.
 
 ## Offline limits
 
@@ -62,4 +66,4 @@ The app must load online once before it can reopen offline. IndexedDB contains r
 
 ## Next gate
 
-Finish secure OpenAI setup and test an actual photo through the full provider pipeline, then publish privately and test on the user's phone. The Android bundle is the next phase after that working web version; see `docs/ANDROID.md`. No `.aab` or installable `.apk` has been generated yet.
+Enter an OpenAI key through the private website, test an actual photo through the full provider pipeline, and test camera/GPS on the user's phone. The Android bundle is the next phase after that working web version; see `docs/ANDROID.md`. No `.aab` or installable `.apk` has been generated yet.

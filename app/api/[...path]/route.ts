@@ -14,6 +14,12 @@ import {
 } from "@/lib/server";
 import { categories, type ObservationWire } from "@/lib/types";
 import { identify } from "@/lib/identify";
+import {
+  accountKeySettings,
+  getAccountKey,
+  keyStatus,
+} from "@/lib/account-key";
+import { OpenAIConnectionError } from "@/lib/openai-response";
 export const dynamic = "force-dynamic";
 const authSchema = z.object({
   email: z
@@ -142,13 +148,16 @@ async function handle(request: Request) {
       Number(request.headers.get("content-length") || 0) > 6 * 1024 * 1024
     )
       return json({ error: "Image is too large." }, 413);
-    if (path[0] === "status")
+    if (path[0] === "status") {
+      const viewer = await getUser(request);
+      const saved = viewer ? await keyStatus(viewer.id) : null;
       return json({
         storage: !!bindings().DB && !!bindings().BUCKET,
-        identification: !!bindings().OPENAI_API_KEY,
+        identification: !!bindings().OPENAI_API_KEY || !!saved?.hasKey,
         plantnet: !!bindings().PLANTNET_API_KEY,
         bioclip: !!bindings().BIOCLIP_URL,
       });
+    }
     if (path[0] === "auth") {
       if (path[1] === "me" && request.method === "GET")
         return await auth(request, "me");
@@ -158,6 +167,17 @@ async function handle(request: Request) {
     }
     const user = await getUser(request);
     if (!user) return json({ error: "Sign in to sync your journal." }, 401);
+    if (path[0] === "settings" && path[1] === "openai-key") {
+      if (
+        request.method !== "GET" &&
+        request.headers.get("origin") !== new URL(request.url).origin
+      )
+        return json(
+          { error: "Open API key settings in this app to make changes." },
+          403,
+        );
+      return await accountKeySettings(request, user.id, path[2]);
+    }
     if (path[0] !== "observations") return json({ error: "Not found" }, 404);
     const id = path[1];
     if (!id && request.method === "GET") {
@@ -197,14 +217,18 @@ async function handle(request: Request) {
       const record = JSON.parse(existing.data) as ObservationWire;
       if (record.analysisState === "complete" && record.identification)
         return json({ identification: record.identification });
-      if (!bindings().OPENAI_API_KEY)
+      const apiKey = await getAccountKey(user.id);
+      if (!apiKey)
         return json(
-          { error: "Live identification is waiting for secure API setup." },
+          {
+            error:
+              "Open API key settings to connect photo identification. Your photo is saved.",
+          },
           503,
         );
       const object = await bindings().BUCKET.get(existing.photo_key);
       if (!object) return json({ error: "Photo unavailable" }, 404);
-      const result = await identify(await object.arrayBuffer(), record);
+      const result = await identify(await object.arrayBuffer(), record, apiKey);
       const fresh = await database()
         .prepare("SELECT data FROM observations WHERE id=? AND user_id=?")
         .bind(id, user.id)
@@ -276,6 +300,8 @@ async function handle(request: Request) {
     }
     return json({ error: "Not found" }, 404);
   } catch (error) {
+    if (error instanceof OpenAIConnectionError)
+      return json({ error: error.message }, error.status);
     if (error instanceof z.ZodError || error instanceof SyntaxError)
       return json(
         {
@@ -283,10 +309,7 @@ async function handle(request: Request) {
         },
         400,
       );
-    console.error(
-      "Fieldnotes request failed",
-      error instanceof Error ? error.message : "Unknown error",
-    );
+    console.error("Fieldnotes request failed");
     return json(
       {
         error:
@@ -302,3 +325,4 @@ async function handle(request: Request) {
 export const GET = handle;
 export const POST = handle;
 export const PUT = handle;
+export const DELETE = handle;

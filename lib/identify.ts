@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { bindings } from "./server";
+import { checkOpenAIResponse } from "./openai-response";
 import {
   categories,
   type Identification,
@@ -114,9 +115,9 @@ export async function references(scientificName: string, commonName: string) {
 export async function identify(
   photo: ArrayBuffer,
   record: ObservationWire,
+  apiKey: string,
 ): Promise<Identification> {
   const env = bindings();
-  if (!env.OPENAI_API_KEY) throw new Error("OPENAI_NOT_CONFIGURED");
   const bytes = new Uint8Array(photo);
   let binary = "";
   for (let i = 0; i < bytes.length; i += 8192)
@@ -139,7 +140,7 @@ export async function identify(
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+      Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
     signal: AbortSignal.timeout(60000),
@@ -172,19 +173,7 @@ export async function identify(
       },
     }),
   });
-  if (!response.ok) {
-    if (response.status === 429)
-      throw new Error(
-        "Identification is busy or the API quota needs attention. Your photo is saved.",
-      );
-    if (response.status === 401)
-      throw new Error(
-        "The identification service needs its API connection checked. Your photo is saved.",
-      );
-    throw new Error(
-      "Identification is temporarily unavailable. Your photo is saved.",
-    );
-  }
+  checkOpenAIResponse(response);
   const result: any = await response.json();
   const text = result.output
     ?.flatMap((x: any) => x.content || [])

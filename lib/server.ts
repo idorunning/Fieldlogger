@@ -3,6 +3,7 @@ export type Bindings = {
   DB: D1Database;
   BUCKET: R2Bucket;
   OPENAI_API_KEY?: string;
+  API_KEY_ENCRYPTION_KEY?: string;
   OPENAI_MODEL?: string;
   PLANTNET_API_KEY?: string;
   BIOCLIP_URL?: string;

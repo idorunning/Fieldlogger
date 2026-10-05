@@ -1,5 +1,5 @@
 /* App shell and original photos are separate: API responses are never cached. */
-const CACHE = "fieldnotes-shell-v1";
+const CACHE = "fieldnotes-shell-v2";
 const SHELL = [
   "/",
   "/favicon.svg",

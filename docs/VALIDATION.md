@@ -1,4 +1,4 @@
-# Validation — 4 October 2026
+# Validation — 5 October 2026
 
 Executed against the actual local Cloudflare Worker preview with D1 and R2 emulation, not an in-memory backend mock.
 
@@ -13,3 +13,12 @@ Executed against the actual local Cloudflare Worker preview with D1 and R2 emula
 - Browser WebMCP is feature-detected. Supported-context registration validation is unavailable in the test browser; this does not affect normal controls.
 
 Not yet verified: a real OpenAI identification, Pl@ntNet/BioCLIP inference, a hosted production deployment, physical Android camera/GPS/Background Sync, or an Android APK/AAB. No provider key has been created or written, and no private photo has been sent to a model provider during these checks.
+
+## Private API-key settings
+
+- TypeScript, production build, and all nine domain/security tests passed.
+- AES-GCM round trip, per-owner additional authenticated data, wrong-master rejection, random nonce per write and tamper rejection tested.
+- Local D1 integration passed: authenticated create/replace/remove, cross-account isolation, no credential in responses, no-store response headers, strict Origin enforcement (including missing Origin), JSON/payload validation, and no-key connection test.
+- Mobile browser passed: sign-in gate, masked entry, field clearing, persisted status after reload, replacement, expired-key message, confirmed removal, offline lockout, no key in IndexedDB/localStorage/sessionStorage, no overflow or uncaught browser errors.
+- Full prior photo/offline browser suite and server integration rerun and passed after this change.
+- All key tests used deliberate non-provider fixtures. The expired-key UI response was simulated; backend status mapping was unit-tested. No real OpenAI key, connection test, or photo analysis was exercised.

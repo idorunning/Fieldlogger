@@ -32,3 +32,10 @@ export const authAttempts = sqliteTable("auth_attempts", {
   count: integer("count").notNull(),
   resetAt: integer("reset_at").notNull(),
 });
+export const accountKeys = sqliteTable("account_keys", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  envelope: text("envelope").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});

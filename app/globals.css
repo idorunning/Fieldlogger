@@ -1336,6 +1336,36 @@ small {
   background: white;
   box-shadow: 0 1px 5px #233c2710;
 }
+.key-settings > p {
+  margin: 14px 0;
+}
+.key-security {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: #edf3ec;
+  border-radius: 14px;
+  padding: 16px;
+  margin: 18px 0;
+}
+.key-security svg {
+  flex-shrink: 0;
+}
+.key-security p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+}
+.key-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 16px 0;
+}
+.app-footer {
+  flex-wrap: wrap;
+  gap: 12px;
+}
 .form-stack {
   display: flex;
   flex-direction: column;

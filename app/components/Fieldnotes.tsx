@@ -43,6 +43,7 @@ import {
   ImagePlus,
   CircleHelp,
   CheckCheck,
+  KeyRound,
 } from "lucide-react";
 import {
   categories,
@@ -64,6 +65,7 @@ import {
 import { preparePhoto, locate, localDate } from "@/lib/photo";
 import { useAuth } from "./AuthProvider";
 import MapView from "./MapView";
+import ApiKeySettings from "./ApiKeySettings";
 type View = "journal" | "map" | "collection" | "achievements" | "sources";
 const icons = {
   plants: Sprout,
@@ -891,6 +893,7 @@ export default function Fieldnotes() {
     [to, setTo] = useState(""),
     [filters, setFilters] = useState(false),
     [login, setLogin] = useState(false),
+    [keySettings, setKeySettings] = useState(false),
     [selected, setSelected] = useState<string | null>(null),
     [draft, setDraft] = useState<Draft | null>(null),
     [busy, setBusy] = useState(false),
@@ -965,6 +968,26 @@ export default function Fieldnotes() {
       clearInterval(interval);
     };
   }, [sync, authLoading]);
+  useEffect(() => {
+    if (window.location.hash === "#api-key") setKeySettings(true);
+  }, []);
+  const refreshStatus = useCallback(() => {
+    fetch("/api/status", { cache: "no-store" })
+      .then(
+        (r) =>
+          r.json() as Promise<{
+            storage: boolean;
+            identification: boolean;
+            plantnet: boolean;
+            bioclip: boolean;
+          }>,
+      )
+      .then(setStatus)
+      .catch(() => {});
+  }, []);
+  useEffect(() => {
+    refreshStatus();
+  }, [owner, online, refreshStatus]);
   useEffect(() => {
     fetch("/api/status")
       .then(
@@ -1277,6 +1300,14 @@ export default function Fieldnotes() {
             {nav.find((x) => x.id === view)?.label || "Field guide"}
           </div>
           <div className="topbar-actions">
+            <button
+              className="icon-button"
+              aria-label="API key settings"
+              title="API key settings"
+              onClick={() => setKeySettings(true)}
+            >
+              <KeyRound size={20} />
+            </button>
             <span className="sync-status">
               {!online ? (
                 <>
@@ -1895,8 +1926,8 @@ export default function Fieldnotes() {
                   text: "Suggests an identity, visible clues and alternatives, using capture time and approximate location. Confidence is qualitative. Your photo and nearby coordinates are sent only when you are signed in and connected.",
                   url: "https://platform.openai.com/docs/guides/images-vision",
                   state: status.identification
-                    ? "Connected"
-                    : "Secure API setup pending",
+                    ? "Key saved · test in API key settings"
+                    : "Add a key in API key settings",
                 },
                 {
                   name: "Wikipedia",
@@ -2027,6 +2058,9 @@ export default function Fieldnotes() {
             <span>
               <Leaf size={14} /> Made for wandering minds.
             </span>
+            <button onClick={() => setKeySettings(true)}>
+              API key settings <KeyRound size={14} />
+            </button>
             <button onClick={() => setView("sources")}>
               Sources & offline help <CircleHelp size={14} />
             </button>
@@ -2090,6 +2124,32 @@ export default function Fieldnotes() {
         onChange={(e) => photoChosen(e.target.files?.[0], "gallery")}
       />
       {login && <Login onClose={() => setLogin(false)} />}{" "}
+      {keySettings && !login && (
+        <Dialog title="API key settings" onClose={() => setKeySettings(false)}>
+          {user ? (
+            <ApiKeySettings
+              online={online}
+              onChanged={() => {
+                refreshStatus();
+                void sync();
+              }}
+            />
+          ) : (
+            <>
+              <p className="muted">
+                Sign in or create your private journal account before saving an
+                API key.
+              </p>
+              <button
+                className="button primary full"
+                onClick={() => setLogin(true)}
+              >
+                Sign in or create account
+              </button>
+            </>
+          )}
+        </Dialog>
+      )}
       {draft && (
         <Capture
           draft={draft}
