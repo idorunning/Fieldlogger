@@ -50,7 +50,7 @@ Unpublishing/archiving removes further shared access, but cannot recall saved co
 
 Illustrated avatar choices and achievement IDs/earned timestamps sync to the account and are deleted with it. Avatars are public with a username, not profile photographs. Achievements are private and permanent after earning; archiving does not remove them.
 
-Forecast lookups send coarse coordinates rounded to about 10 km to Open-Meteo and cache them for 15 minutes, without per-user location history. Postcode/place search queries go to Postcodes.io or Photon. Weather effects and backgrounds can be disabled.
+Forecast lookups send coarse coordinates rounded to about 10 km to Open-Meteo or MET Norway and cache them for 15 minutes, without per-user location history. Postcode/place search queries go to Postcodes.io or Photon. Weather effects and backgrounds can be disabled.
 
 POST_NOTIFICATIONS is optional on Android 13+. WorkManager periodically checks currently readable publications from followed members. There is no push token or third-party messaging SDK. Notification contents use the public username and photo name, with private lock-screen visibility.
 

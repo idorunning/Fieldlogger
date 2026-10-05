@@ -38,8 +38,7 @@ public final class WeatherScene extends View {
     try {
       ZonedDateTime rise = LocalDateTime.parse(w.optString("sunrise")).atZone(now.getZone()),
           set = LocalDateTime.parse(w.optString("sunset")).atZone(now.getZone());
-      if (now.toLocalDate().equals(rise.toLocalDate()))
-        return now.isBefore(rise) || now.isAfter(set) ? "night" : "day";
+      return now.isBefore(rise) || now.isAfter(set) ? "night" : "day";
     } catch (Exception ignored) {
     }
     int h = now.getHour();

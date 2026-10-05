@@ -1973,9 +1973,10 @@ public final class LauncherActivity extends AppCompatActivity {
     section(
         content,
         "Weather & postcode search",
-        "Local weather uses coarse Open-Meteo forecasts. Sunrise and sunset guide the background"
-            + " light. UK postcodes use Postcodes.io; other place searches use Photon. Forecasts"
-            + " are approximate and no continuous background location is requested.");
+        "Local weather uses coarse Open-Meteo or MET Norway forecasts (CC BY 4.0). Sunrise and"
+            + " sunset guide the background light. UK postcodes use Postcodes.io; other place"
+            + " searches use Photon. Forecasts are approximate and no continuous background"
+            + " location is requested.");
     content.addView(
         button("Open-Meteo attribution", false, () -> openReference("https://open-meteo.com/")));
     space(content, 10);
