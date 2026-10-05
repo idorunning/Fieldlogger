@@ -9,6 +9,9 @@ export async function accessFor(user:User){
   return {role:root?'admin':row?.role||'member',status:root?'active':row?.status||'active',owner:root};
 }
 const memberSelect=`SELECT u.id,u.email,u.name,u.created_at AS createdAt,p.username,COALESCE(a.role,'member') AS role,COALESCE(a.status,'active') AS status,(SELECT COUNT(*) FROM observations o WHERE o.user_id=u.id) AS photoCount FROM users u LEFT JOIN profiles p ON p.user_id=u.id LEFT JOIN member_access a ON a.user_id=u.id`;
+// Reauthentication can finish before account erasure or privilege revocation.
+// Check the actor again inside the final transactional write, including owners.
+const liveAdminActor=`EXISTS(SELECT 1 FROM users actor WHERE actor.id=? AND ((actor.id=? AND lower(actor.email)='ntracey@gmail.com') OR EXISTS(SELECT 1 FROM member_access a WHERE a.user_id=actor.id AND a.role='admin' AND a.status='active')))`;
 async function displayMember(m:any){
   if(m.id===bindings().COMMUNITY_ADMIN_USER_ID&&String(m.email).toLowerCase()==='ntracey@gmail.com'){m.role='admin';m.status='active';m.owner=true;}
   const billing=await billingStatus(m.id,false);return {...m,plan:billing.plan,subscriptionStatus:billing.status};
@@ -58,8 +61,8 @@ export async function adminRoute(request:Request,path:string[],user:User){
   if(!role||!status)return json({error:'Choose a valid role or status.'},400);
   const now=new Date().toISOString();
   const result=await database().batch([
-    database().prepare(`INSERT INTO member_access(user_id,role,status,updated_at) SELECT ?,?,?,? WHERE ?=? OR EXISTS(SELECT 1 FROM member_access WHERE user_id=? AND role='admin' AND status='active') ON CONFLICT(user_id) DO UPDATE SET ${action==='role'?'role=excluded.role':'status=excluded.status'},updated_at=excluded.updated_at`).bind(id,role,status,now,user.id,bindings().COMMUNITY_ADMIN_USER_ID||'',user.id),
-    database().prepare('INSERT INTO admin_audit(id,actor_id,target_id,action,created_at) SELECT ?,?,?,?,? WHERE changes()>0').bind(crypto.randomUUID(),user.id,id,action+':'+(action==='role'?role:status),now),
+    database().prepare(`INSERT INTO member_access(user_id,role,status,updated_at) SELECT ?,?,?,? WHERE ${liveAdminActor} ON CONFLICT(user_id) DO UPDATE SET ${action==='role'?'role=excluded.role':'status=excluded.status'},updated_at=excluded.updated_at`).bind(id,role,status,now,user.id,bindings().COMMUNITY_ADMIN_USER_ID||''),
+    database().prepare(`INSERT INTO admin_audit(id,actor_id,target_id,action,created_at) SELECT ?,?,?,?,? WHERE changes()>0 AND ${liveAdminActor}`).bind(crypto.randomUUID(),user.id,id,action+':'+(action==='role'?role:status),now,user.id,bindings().COMMUNITY_ADMIN_USER_ID||''),
   ]);
   if(!result[0].meta.changes)return json({error:'Your administrator access changed. Please refresh.'},403);
   const updated=await database().prepare(memberSelect+' WHERE u.id=?').bind(id).first<any>();
