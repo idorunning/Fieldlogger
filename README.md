@@ -68,8 +68,12 @@ The Sites skill's local helper scripts were not installed in this environment. S
 
 ## Offline limits
 
-The app must load online once before it can reopen offline. IndexedDB contains resized JPEGs, capture metadata and downloaded field notes. Browser storage can be cleared or evicted; synced storage and exports provide copies. Background work is controlled by Android/browser scheduling; force-stopping the app can defer upload until reopening. Map tiles are online-only in accordance with the standard OSM tile policy. A GPS fix can work offline but depends on device and permissions.
+The web app must load online once before it can reopen offline. The native Android app can capture and save offline from its first launch. IndexedDB contains resized JPEGs, capture metadata and downloaded field notes. Browser storage can be cleared or evicted; synced storage and exports provide copies. Background work is controlled by Android/browser scheduling; force-stopping the app can defer upload until reopening. Map tiles are online-only in accordance with the standard OSM tile policy. A GPS fix can work offline but depends on device and permissions.
 
 ## Next gate
 
-Test the signed Android release on the user's phone, including camera/GPS and offline reopening. The deployed provider, image storage, and identification pipeline have passed live checks. Android release packaging now wraps that working web version; see `docs/ANDROID.md`. The Android project now targets `com.field.logger`; see [docs/ANDROID.md](docs/ANDROID.md) for release signing, rebuild and Play Console instructions.
+Test the signed Android release on the user's phone, including camera/GPS and offline reopening. The deployed provider, image storage, and identification pipeline have passed live checks. Android version 2.0.0 implements native screens, camera, storage and background uploads; see `docs/ANDROID.md`. The Android project now targets `com.field.logger`; see [docs/ANDROID.md](docs/ANDROID.md) for release signing, rebuild and Play Console instructions.
+
+## Native Android app
+
+The Android source in `android/` now builds Field Logger 2.0.0 as a native app. It uses CameraX, app-private SQLite/photo storage and WorkManager rather than launching Chrome. It connects to the existing account and identification APIs; the web application remains separately implemented. See [native release and migration instructions](docs/ANDROID.md).

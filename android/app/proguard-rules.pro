@@ -1,1 +1,1 @@
-# Entry points and browser integration are retained by their manifests and library rules.
+# Android entry points and CameraX/WorkManager components are retained by manifests and their library consumer rules.

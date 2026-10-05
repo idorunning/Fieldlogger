@@ -1,38 +1,39 @@
-# Field Logger Android release
+# Field Logger native Android release
 
-Package: **com.field.logger**. Version: **1.0.4**, version code **5**. Minimum Android: 7 (API 24), meeting Google Play automatic protection's minimum-SDK requirement. Target and compile SDK: Android 16 (API 36).
+Package **com.field.logger**, version **2.0.0**, version code **6**. Minimum Android 7/API 24; target and compile SDK 36. The existing upload signing key is reused.
 
-The Android app uses Google's Android Browser Helper 2.7.3 to open `https://fieldlogger.co.uk` as a Trusted Web Activity. This retains Chrome's camera/gallery intents, sharing, private account cookies, offline app shell and IndexedDB journal. A visible native launch screen replaces the transparent trampoline and transferred splash. Failed browser startup offers retry, explicit external-browser launch and browser settings; fallback never routes the app's verified link into itself. The packaged asset-statements JSON is escaped for Android resources. Release 1.0.4 marks its launch URL so the updated service worker can refresh that initial visible page after caching the repaired shell, preserving stored photos.
+This release replaces the Trusted Web Activity with an Android interface written with AppCompat views. It has no WebView, browser launcher or downloaded HTML/JavaScript interface. CameraX provides camera preview, capture, tap-to-focus, pinch zoom and flash control. The app uses its own SQLite database and app-private photo files. WorkManager schedules connection-dependent background uploads and periodic retries; Android controls exact execution timing.
 
-The website must load online once before offline use. Reopening returns the saved shell immediately while refreshing it in the background; API responses and photos remain account-scoped. Uploads resume when the app is foregrounded and connected; Android/browser background scheduling is not guaranteed.
+## Behaviour
 
-The phone interface opens on a full-screen woodland photograph with a large camera action and gallery button. Journal cards are large photographs; capture offers direct save and optional metadata; identification detail keeps the photo above expandable background information. Bottom navigation and capture controls support touch. Real source photos and credits are documented in `PHOTO-CREDITS.json` and `woodland-source.json`.
+- Home is a native photo journal over the bundled woodland photograph. Native bottom navigation: Journal, Map, Camera, Collection and Milestones.
+- Photos are resized to JPEG and EXIF removed, while original capture time and embedded GPS are saved separately. Gallery photos without EXIF are not assigned the phone's current coordinates.
+- Camera and foreground location grants are reused. Location requests stop after a short capture window; there is no background location permission or continuous walk tracking.
+- A late GPS fix updates the captured discovery, including after saving. Nearby place names use the existing Photon/OpenStreetMap server endpoint, with local caching and reconnect retries. Entered place names are preserved.
+- Existing Field Logger password login, registration and server-side encrypted OpenAI keys are reused. The native login cookie is encrypted using Android Keystore. Passwords and OpenAI keys are not stored in the app.
+- Uploaded discoveries download through the same account. Each local record is separated by account. Upload completions and remote merges cannot replace newer pending edits.
+- Native discovery detail, corrections, notes, date/place filters, category collection, species statistics, milestones, OpenStreetMap map, image sharing and story sharing are included. Exact GPS is omitted from shared story cards.
+- A partially captured photo is retained as a draft and can be resumed or discarded after returning to Camera.
+- Account settings provide JSON export/import and account deletion. Public references open their respective websites only when selected.
 
-## Build again
+## Moving from the web app
 
-Install Java 17 or 21 with a compiler, Android platform 36 and build tools. Set `ANDROID_HOME` to the SDK. Gradle 8.13 is pinned by the wrapper with its official SHA-256 checksum. AGP 8.13.2 may install its required build-tool version after licence acceptance.
+The old TWA stored local data and sessions in Chrome. Native apps cannot read another app's private storage. Before updating, open the old app or fieldlogger.co.uk in the same browser, reconnect, and let pending photos upload. Export the web journal for an additional backup, especially for device-only or queued photos.
 
-Supply these variables through a private environment or secure CI secret configuration:
+Update through the same Google Play testing track. Sign in once with your existing Field Logger account; uploaded discoveries download automatically. To transfer photos that only exist in browser storage, select **Import web journal backup** in the native account/login screen and choose the exported JSON. The import retains observation IDs, photos, dates, coordinates, names and notes. Records already present at an equal/newer revision are retained. The old browser journal is not deleted by the native app.
 
-- `FIELDLOGGER_KEYSTORE`: absolute path to the persistent PKCS12 key file.
-- `FIELDLOGGER_STORE_PASSWORD`: keystore password.
-- `FIELDLOGGER_KEY_PASSWORD`: private-key password (same password for the delivered PKCS12 backup).
+## Build
 
-Run `python scripts/build-android.py`. Artifact filenames use the version from the built APK metadata. Signing alias: `fieldlogger`. Increment `versionCode` and `versionName` for subsequent Play uploads. Never put signing credentials in source, command arguments, the app or the website. The release build refuses to proceed if signing variables are missing.
+Use JDK 21, Android SDK 36, build tools 36.0.0 and the Gradle wrapper. Supply `ANDROID_HOME`, `FIELDLOGGER_KEYSTORE`, `FIELDLOGGER_STORE_PASSWORD`, `FIELDLOGGER_KEY_PASSWORD` and `JAVA_HOME` through a private process environment. Do not put secrets in source, logs or command arguments.
 
-## Signing and backups
+Run `python scripts/build-android.py` from the repository. It produces versioned signed AAB/APK files in the sibling `artifacts` folder. Signing alias `fieldlogger`, PKCS12 upload key. Java time support is desugared for API 24/25.
 
-The release key is generated once and reused. Its public SHA-256 certificate fingerprint is in `public/.well-known/assetlinks.json`. The private signing backup is delivered separately and is excluded from the public repository and web archive. Download and keep that backup privately; it is needed for future releases. The AAB is signed for upload, and the APK is signed for direct installation. An AAB cannot be installed by tapping it.
+Run `android/gradlew testDebugUnitTest` from the Android project. The framework tests exercise native startup and navigation on SDK 24 and 36, and database tests exercise offline storage, account isolation, late GPS, stale-upload protection, manual place protection and analysis merging. An opt-in live API contract test creates/uploads/deletes its own throwaway account without configuring an OpenAI key; enable with `FIELDLOGGER_NATIVE_LIVE_TESTS=1`.
 
 ## Google Play
 
-1. Upload `fieldlogger-1.0.4-play.aab` (version code 5) to the existing Play Console application for internal testing. This includes the startup repairs and retains the API 24 minimum SDK.
-2. Enrol in Play App Signing. If Play generates an app-signing key, copy the **app-signing certificate** SHA-256 from Play Console's App integrity page and add it to the website's existing `sha256_cert_fingerprints`. Keep the delivered APK/upload certificate too. Otherwise the Play-installed app will show browser controls rather than the full-screen interface. A public certificate fingerprint can be shared for this step; never share a private key or password.
-3. Set the privacy-policy URL to `https://fieldlogger.co.uk/privacy`, and account-deletion URL to `https://fieldlogger.co.uk/delete-account`. Complete Data safety and content rating accurately: account details, photos and optional saved location; OpenAI receives photos and approximate location only after key setup. See `PLAY-RELEASE.md`.
-4. Test camera and location permission denial, offline reopen, gallery import, reconnect upload and sharing on an actual phone before requesting production review.
+Upload **fieldlogger-2.0.0-play.aab** to the existing application and testing track. Package and upload key match prior releases; Play signs installed updates with the account's existing app-signing key. The separately delivered direct APK uses the upload key and cannot update a Play-signed installation.
 
-Native startup regression tests use Robolectric on API 24 and 36: missing-browser recovery, external browser opening, self-link prevention, launch artwork and packaged domain JSON. Run `android/gradlew testDebugUnitTest` from the Android project with a full JDK and SDK installed. These tests exercise the Android framework in the JVM; physical fullscreen presentation, camera/GPS, and background scheduling still need device confirmation.
+Review Data safety for the native release: account details, photos, capture times, optional foreground location, background upload and optional OpenAI analysis. Keep the privacy and deletion URLs. Test camera/location denial, capture, offline reopen, reconnect, signing into the existing account and sharing on the Pixel before promoting the test release. The workspace's release report distinguishes automated checks from physical-phone checks.
 
-This work produces release files; it does not submit to Google Play. Google Play review and account-specific testing requirements remain separate.
-
-The Play app-signing and upload certificate are both published. Google Digital Asset Links confirmed the Play certificate with `linked: true` on 5 October 2026. This is a TWA, with browser-backed storage and rendering, not a native UI rewrite. Version 1.0.4 opens a compact photo journal, retains automatic GPS, and fills nearby place names with Photon/OpenStreetMap.
+The website's design is unchanged in this task. There is no automatic Google Play submission.

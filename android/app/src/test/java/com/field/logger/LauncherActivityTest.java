@@ -3,93 +3,139 @@ package com.field.logger;
 import static org.junit.Assert.*;
 
 import android.content.Intent;
-import android.content.pm.ActivityInfo;
-import android.content.pm.ResolveInfo;
-import android.graphics.Bitmap;
-import android.net.Uri;
-import android.view.View;
-import android.widget.TextView;
-import com.google.androidbrowserhelper.trusted.Utils;
-import org.json.JSONArray;
-import org.junit.Test;
+import android.view.*;
+import android.widget.*;
+import com.field.logger.nativeapp.*;
+import org.junit.*;
 import org.junit.runner.RunWith;
-import org.robolectric.Robolectric;
-import org.robolectric.RobolectricTestRunner;
-import org.robolectric.RuntimeEnvironment;
-import org.robolectric.Shadows;
+import org.robolectric.*;
 import org.robolectric.android.controller.ActivityController;
 import org.robolectric.annotation.Config;
 
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = {24, 36})
 public class LauncherActivityTest {
-    private ActivityController<LauncherActivity> coldStart() {
-        Intent intent = new Intent(RuntimeEnvironment.getApplication(), LauncherActivity.class);
-        intent.setAction(Intent.ACTION_MAIN);
-        intent.addCategory(Intent.CATEGORY_LAUNCHER);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        return Robolectric.buildActivity(LauncherActivity.class, intent);
-    }
+  @Before
+  public void initializeBackgroundScheduler() {
+    androidx.work.Configuration configuration =
+        new androidx.work.Configuration.Builder()
+            .setExecutor(Runnable::run)
+            .setWorkerFactory(
+                new androidx.work.WorkerFactory() {
+                  @Override
+                  public androidx.work.ListenableWorker createWorker(
+                      android.content.Context context,
+                      String className,
+                      androidx.work.WorkerParameters parameters) {
+                    return new androidx.work.Worker(context, parameters) {
+                      @Override
+                      public Result doWork() {
+                        return Result.success();
+                      }
+                    };
+                  }
+                })
+            .build();
+    androidx.work.testing.WorkManagerTestInitHelper.initializeTestWorkManager(
+        RuntimeEnvironment.getApplication(), configuration);
+  }
 
-    @Test public void coldStartWithoutBrowserOffersRecoveryInsteadOfCrashing() {
-        try (ActivityController<LauncherActivity> controller = coldStart()) {
-            controller.create().start().resume().visible();
-            LauncherActivity activity = controller.get();
-            assertEquals(View.VISIBLE, activity.findViewById(R.id.startup_actions).getVisibility());
-            assertEquals(View.GONE, activity.findViewById(R.id.startup_progress).getVisibility());
-            assertTrue(((TextView) activity.findViewById(R.id.startup_status)).getText().toString().contains("browser"));
-            assertFalse(activity.isFinishing());
-        }
+  private View find(View view, String description) {
+    if (view.getContentDescription() != null
+        && description.contentEquals(view.getContentDescription())) return view;
+    if (view instanceof ViewGroup) {
+      ViewGroup group = (ViewGroup) view;
+      for (int i = 0; i < group.getChildCount(); i++) {
+        View match = find(group.getChildAt(i), description);
+        if (match != null) return match;
+      }
     }
+    return null;
+  }
 
-    @Test public void browserRecoveryOpensTheJournalInAnExternalPackage() {
-        try (ActivityController<LauncherActivity> controller = coldStart()) {
-            controller.create().start().resume().visible();
-            LauncherActivity activity = controller.get();
-            ResolveInfo browser = new ResolveInfo();
-            browser.activityInfo = new ActivityInfo();
-            browser.activityInfo.packageName = "test.browser";
-            browser.activityInfo.name = "test.browser.BrowserActivity";
-            Intent query = new Intent(Intent.ACTION_VIEW, Uri.parse("https://example.org/"));
-            query.addCategory(Intent.CATEGORY_BROWSABLE);
-            Shadows.shadowOf(activity.getPackageManager()).addResolveInfoForIntent(query, browser);
-            activity.findViewById(R.id.open_browser).performClick();
-            Intent launched = Shadows.shadowOf(activity).getNextStartedActivity();
-            assertNotNull(launched);
-            assertEquals("test.browser", launched.getPackage());
-            assertEquals("fieldlogger.co.uk", launched.getData().getHost());
-            assertEquals("/", launched.getData().getPath());
-            assertEquals(BuildConfig.VERSION_NAME, launched.getData().getQueryParameter("app_version"));
-            assertTrue(activity.isFinishing());
-        }
+  private boolean hasText(View view, String text) {
+    if (view instanceof TextView && ((TextView) view).getText().toString().contains(text))
+      return true;
+    if (view instanceof ViewGroup) {
+      ViewGroup group = (ViewGroup) view;
+      for (int i = 0; i < group.getChildCount(); i++)
+        if (hasText(group.getChildAt(i), text)) return true;
     }
+    return false;
+  }
 
-    @Test public void browserRecoveryNeverRelaunchesFieldLoggerIntoItself() {
-        try (ActivityController<LauncherActivity> controller = coldStart()) {
-            controller.create().start().resume().visible();
-            LauncherActivity activity = controller.get();
-            ResolveInfo self = new ResolveInfo();
-            self.activityInfo = new ActivityInfo();
-            self.activityInfo.packageName = activity.getPackageName();
-            self.activityInfo.name = LauncherActivity.class.getName();
-            Intent query = new Intent(Intent.ACTION_VIEW, Uri.parse("https://example.org/"));
-            query.addCategory(Intent.CATEGORY_BROWSABLE);
-            Shadows.shadowOf(activity.getPackageManager()).addResolveInfoForIntent(query, self);
-            activity.findViewById(R.id.open_browser).performClick();
-            assertNull(Shadows.shadowOf(activity).getNextStartedActivity());
-            assertFalse(activity.isFinishing());
-            assertEquals(View.VISIBLE, activity.findViewById(R.id.startup_actions).getVisibility());
-        }
+  private boolean containsWebView(View view) {
+    if (view instanceof android.webkit.WebView) return true;
+    if (view instanceof ViewGroup) {
+      ViewGroup group = (ViewGroup) view;
+      for (int i = 0; i < group.getChildCount(); i++)
+        if (containsWebView(group.getChildAt(i))) return true;
     }
+    return false;
+  }
 
-    @Test public void splashImageCanBeConvertedByTheBrowserHelper() {
-        Bitmap image = Utils.convertDrawableToBitmap(RuntimeEnvironment.getApplication(), R.drawable.splash);
-        assertNotNull(image);
-        assertTrue(image.getWidth() > 0 && image.getHeight() > 0);
-    }
+  private ActivityController<LauncherActivity> start() {
+    return Robolectric.buildActivity(
+            LauncherActivity.class,
+            new Intent(RuntimeEnvironment.getApplication(), LauncherActivity.class))
+        .setup()
+        .visible();
+  }
 
-    @Test public void packagedAssetStatementsAreValidJson() throws Exception {
-        JSONArray statements = new JSONArray(RuntimeEnvironment.getApplication().getString(R.string.asset_statements));
-        assertEquals("https://fieldlogger.co.uk", statements.getJSONObject(0).getJSONObject("target").getString("site"));
+  @Test
+  public void nativeJournalStartsWithoutLaunchingAnyBrowser() {
+    try (ActivityController<LauncherActivity> controller = start()) {
+      LauncherActivity app = controller.get();
+      View root = app.getWindow().getDecorView();
+      assertTrue(hasText(root, "Your field journal"));
+      assertNotNull(find(root, "Camera"));
+      assertNull(Shadows.shadowOf(app).getNextStartedActivity());
+      assertFalse(containsWebView(root));
+      assertFalse(app.isFinishing());
     }
+  }
+
+  @Test
+  public void nativeNavigationShowsCollectionAndMilestones() {
+    try (ActivityController<LauncherActivity> controller = start()) {
+      LauncherActivity app = controller.get();
+      View root = app.getWindow().getDecorView();
+      find(root, "Collection").performClick();
+      assertTrue(hasText(root, "Your collection"));
+      find(root, "Milestones").performClick();
+      assertTrue(hasText(root, "Stay curious"));
+      find(root, "Journal").performClick();
+      assertTrue(hasText(root, "Your field journal"));
+      assertNull(Shadows.shadowOf(app).getNextStartedActivity());
+    }
+  }
+
+  @Test
+  public void nativeAccountFormUsesExistingFieldLoggerLogin() {
+    try (ActivityController<LauncherActivity> controller = start()) {
+      LauncherActivity app = controller.get();
+      find(app.getWindow().getDecorView(), "Sign in or register").performClick();
+      androidx.appcompat.app.AlertDialog dialog =
+          (androidx.appcompat.app.AlertDialog)
+              org.robolectric.shadows.ShadowDialog.getLatestDialog();
+      assertNotNull(dialog);
+      assertTrue(dialog.isShowing());
+      assertTrue(hasText(dialog.getWindow().getDecorView(), "Welcome back"));
+      assertTrue(hasText(dialog.getWindow().getDecorView(), "Import web journal backup"));
+    }
+  }
+
+  @Test
+  public void cameraDenialDoesNotLaunchBrowserOrDestroyJournal() {
+    try (ActivityController<LauncherActivity> controller = start()) {
+      LauncherActivity app = controller.get();
+      View root = app.getWindow().getDecorView();
+      find(root, "Camera").performClick();
+      assertFalse(app.isFinishing());
+      Intent permission = Shadows.shadowOf(app).getNextStartedActivity();
+      assertNotNull(permission);
+      assertEquals("android.content.pm.action.REQUEST_PERMISSIONS", permission.getAction());
+      assertTrue(hasText(root, "Your field journal"));
+    }
+  }
 }
