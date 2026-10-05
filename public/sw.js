@@ -40,7 +40,9 @@ self.addEventListener("activate", (event) => {
         const url = new URL(client.url);
         if (client.visibilityState === "visible" && url.pathname === "/" && url.searchParams.get("app_version") === "1.0.2") {
           url.searchParams.delete("app_version");
-          await client.navigate(url.href);
+          // Do not await navigation inside activation: its fetch waits for
+          // this worker to activate, so awaiting it would stall both sides.
+          void client.navigate(url.href).catch(() => {});
         }
       }
     })(),
