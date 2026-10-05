@@ -1027,11 +1027,12 @@ export default function Fieldnotes() {
     return () => window.removeEventListener("beforeinstallprompt", install);
   }, []);
   useEffect(() => {
-    const context = (document as any).modelContext;
-    if (!context?.registerTool) return;
     const lifecycle = new AbortController();
-    Promise.resolve(
-      context.registerTool(
+    Promise.resolve().then(() => {
+      if (lifecycle.signal.aborted) return;
+      const context = (document as any).modelContext;
+      if (typeof context?.registerTool !== "function") return;
+      return context.registerTool(
         {
           name: "filter_discoveries",
           description:
@@ -1071,8 +1072,8 @@ export default function Fieldnotes() {
           },
         },
         { signal: lifecycle.signal },
-      ),
-    ).catch(() => {});
+      );
+    }).catch(() => {});
     return () => lifecycle.abort();
   }, []);
   const stats = useMemo(() => getStats(records), [records]),

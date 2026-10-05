@@ -1,7 +1,8 @@
 <resources>
-    <style name="Theme.FieldLogger.Launch" parent="android:style/Theme.Material.Light.NoActionBar">
-        <item name="android:windowIsTranslucent">true</item>
-        <item name="android:windowBackground">@android:color/transparent</item>
+    <style name="Theme.FieldLogger.Launch" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowIsTranslucent">false</item>
+        <item name="android:windowBackground">@drawable/splash</item>
+        <item name="android:colorBackground">@color/forest</item>
         <item name="android:statusBarColor">@color/forest</item>
         <item name="android:navigationBarColor">@color/forest</item>
         <item name="android:windowLightStatusBar">false</item>

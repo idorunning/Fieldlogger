@@ -1,6 +1,6 @@
 # Play Console release preparation
 
-App name: Field Logger. Package: com.field.logger. Release: 1.0.1, version code 2. Minimum SDK: 24, satisfying Play automatic protection's minimum-SDK requirement. Target SDK: 36. Category suggestion: Lifestyle. No advertising, tracking SDK, distance tracking or health measurements. Start with internal testing; no Play submission is authorized in this task.
+App name: Field Logger. Package: com.field.logger. Release: 1.0.2, version code 3. Minimum SDK: 24, satisfying Play automatic protection's minimum-SDK requirement. Target SDK: 36. Category suggestion: Lifestyle. No advertising, tracking SDK, distance tracking or health measurements. Start with internal testing; no Play submission is authorized in this task.
 
 Short description: Photograph and remember the small wonders you find outdoors.
 

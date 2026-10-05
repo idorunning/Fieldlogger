@@ -1,5 +1,5 @@
 /* App shell and original photos are separate: API responses are never cached. */
-const CACHE = "fieldnotes-shell-v4";
+const CACHE = "fieldnotes-shell-v5";
 const SHELL = [
   "/",
   "/privacy",
@@ -34,6 +34,15 @@ self.addEventListener("activate", (event) => {
         if (name.startsWith("fieldnotes-shell-") && name !== CACHE)
           await caches.delete(name);
       await self.clients.claim();
+      // Refresh the first launch of the repaired Android release after all
+      // new shell assets are cached. Ordinary journal sessions stay in place.
+      for (const client of await self.clients.matchAll({ type: "window" })) {
+        const url = new URL(client.url);
+        if (client.visibilityState === "visible" && url.pathname === "/" && url.searchParams.get("app_version") === "1.0.2") {
+          url.searchParams.delete("app_version");
+          await client.navigate(url.href);
+        }
+      }
     })(),
   );
 });

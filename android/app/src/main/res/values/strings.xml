@@ -2,5 +2,12 @@
     <string name="app_name">Field Logger</string>
     <string name="camera_shortcut">New discovery</string>
     <string name="journal_shortcut">My journal</string>
-    <string name="asset_statements">[{"relation":["delegate_permission/common.handle_all_urls"],"target":{"namespace":"web","site":"https://fieldlogger.co.uk"}}]</string>
+    <string name="asset_statements" translatable="false">[{\"relation\":[\"delegate_permission/common.handle_all_urls\"],\"target\":{\"namespace\":\"web\",\"site\":\"https://fieldlogger.co.uk\"}}]</string>
+    <string name="opening_journal">Opening your field journal…</string>
+    <string name="browser_needed">A browser is needed to open your journal. Enable or update Chrome, or choose another browser.</string>
+    <string name="startup_paused">Your journal hasn’t opened yet. Try again or open it in your browser.</string>
+    <string name="try_again">Try again</string>
+    <string name="open_browser">Open in browser</string>
+    <string name="browser_settings">Browser settings</string>
+    <string name="browser_settings_unavailable">Open your phone settings to enable or update a browser, then try again.</string>
 </resources>

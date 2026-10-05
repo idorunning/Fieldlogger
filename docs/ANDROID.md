@@ -1,8 +1,10 @@
 # Field Logger Android release
 
-Package: **com.field.logger**. Version: **1.0.1**, version code **2**. Minimum Android: 7 (API 24), meeting Google Play automatic protection's minimum-SDK requirement. Target and compile SDK: Android 16 (API 36).
+Package: **com.field.logger**. Version: **1.0.2**, version code **3**. Minimum Android: 7 (API 24), meeting Google Play automatic protection's minimum-SDK requirement. Target and compile SDK: Android 16 (API 36).
 
-The Android app uses Google's Android Browser Helper 2.7.3 to open `https://fieldlogger.co.uk` as a Trusted Web Activity. This retains Chrome's camera/gallery intents, sharing, private account cookies, offline app shell and IndexedDB journal. The website must load online once before offline use. Reopening returns the saved shell immediately while refreshing it in the background; API responses and photos remain account-scoped. Uploads resume when the app is foregrounded and connected; Android/browser background scheduling is not guaranteed.
+The Android app uses Google's Android Browser Helper 2.7.3 to open `https://fieldlogger.co.uk` as a Trusted Web Activity. This retains Chrome's camera/gallery intents, sharing, private account cookies, offline app shell and IndexedDB journal. A visible native launch screen replaces the transparent trampoline and transferred splash. Failed browser startup offers retry, explicit external-browser launch and browser settings; fallback never routes the app's verified link into itself. The packaged asset-statements JSON is escaped for Android resources. Release 1.0.2 marks its launch URL so the updated service worker can refresh that initial visible page after caching the repaired shell, preserving stored photos.
+
+The website must load online once before offline use. Reopening returns the saved shell immediately while refreshing it in the background; API responses and photos remain account-scoped. Uploads resume when the app is foregrounded and connected; Android/browser background scheduling is not guaranteed.
 
 The phone interface opens on a full-screen woodland photograph with a large camera action and gallery button. Journal cards are large photographs; capture offers direct save and optional metadata; identification detail keeps the photo above expandable background information. Bottom navigation and capture controls support touch. Real source photos and credits are documented in `PHOTO-CREDITS.json` and `woodland-source.json`.
 
@@ -24,9 +26,11 @@ The release key is generated once and reused. Its public SHA-256 certificate fin
 
 ## Google Play
 
-1. Upload `fieldlogger-1.0.1-play.aab` (version code 2) to the existing Play Console application for internal testing. This replaces the API 23 bundle with an API 24 minimum SDK.
+1. Upload `fieldlogger-1.0.2-play.aab` (version code 3) to the existing Play Console application for internal testing. This includes the startup repairs and retains the API 24 minimum SDK.
 2. Enrol in Play App Signing. If Play generates an app-signing key, copy the **app-signing certificate** SHA-256 from Play Console's App integrity page and add it to the website's existing `sha256_cert_fingerprints`. Keep the delivered APK/upload certificate too. Otherwise the Play-installed app will show browser controls rather than the full-screen interface. A public certificate fingerprint can be shared for this step; never share a private key or password.
 3. Set the privacy-policy URL to `https://fieldlogger.co.uk/privacy`, and account-deletion URL to `https://fieldlogger.co.uk/delete-account`. Complete Data safety and content rating accurately: account details, photos and optional saved location; OpenAI receives photos and approximate location only after key setup. See `PLAY-RELEASE.md`.
 4. Test camera and location permission denial, offline reopen, gallery import, reconnect upload and sharing on an actual phone before requesting production review.
 
-This work produces release files; it does not submit to Google Play. Google Play review and account-specific testing requirements remain separate. Native fullscreen presentation, physical camera/GPS, and background scheduling need device confirmation.
+Native startup regression tests use Robolectric on API 24 and 36: missing-browser recovery, external browser opening, self-link prevention, launch artwork and packaged domain JSON. Run `android/gradlew testDebugUnitTest` from the Android project with a full JDK and SDK installed. These tests exercise the Android framework in the JVM; physical fullscreen presentation, camera/GPS, and background scheduling still need device confirmation.
+
+This work produces release files; it does not submit to Google Play. Google Play review and account-specific testing requirements remain separate.
