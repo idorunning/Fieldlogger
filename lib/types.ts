@@ -32,6 +32,7 @@ export type Identification = {
   category: Category;
   confidence: "high" | "medium" | "low";
   summary: string;
+  interestingFact?: string;
   identifyingFeatures: string[];
   lookCloser: string;
   seasonalContext: string;

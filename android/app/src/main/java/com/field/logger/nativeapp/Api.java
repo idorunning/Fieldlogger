@@ -51,7 +51,7 @@ public final class Api {
             .url(ORIGIN + path)
             .header("Accept", "application/json")
             .header("Origin", ORIGIN)
-            .header("User-Agent", "MyTrailLog-Android/2.2.0");
+            .header("User-Agent", "MyTrailLog-Android/2.3.0");
     if (cookie != null && !cookie.isEmpty()) request.header("Cookie", cookie);
     byte[] payload = body;
     if (payload == null

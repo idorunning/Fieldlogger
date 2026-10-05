@@ -70,6 +70,14 @@ public final class Repository {
       session.save(user, result.cookie);
       db.adoptGuest(user.getString("id"));
       enqueue();
+      FollowWorker.schedule(context);
+      try {
+        if (new JSONObject(
+                TrailPreferences.of(context, user.getString("id")).getString("bulkJob", "{}"))
+            .optString("state")
+            .equals("running")) BulkPublishWorker.enqueue(context, user.getString("id"));
+      } catch (Exception ignored) {
+      }
     }
   }
 
@@ -81,7 +89,11 @@ public final class Repository {
           api.json("/api/auth/logout", "POST", user.optString("cookie"), new JSONObject());
         } catch (IOException ignored) {
         }
+      String signedOutOwner = user == null ? "guest" : user.optString("id");
+      androidx.work.WorkManager.getInstance(context)
+          .cancelUniqueWork("bulk-publish-" + signedOutOwner);
       session.clear();
+      androidx.core.app.NotificationManagerCompat.from(context).cancelAll();
     }
   }
 
@@ -96,12 +108,15 @@ public final class Repository {
       session.clear();
       db.deleteOwner(id);
       db.deleteOwner("draft:" + id);
+      TrailPreferences.of(context, id).edit().clear().commit();
+      androidx.core.app.NotificationManagerCompat.from(context).cancelAll();
     }
   }
 
   public boolean sync() throws Exception {
     synchronized (SYNC_LOCK) {
       String owner = owner();
+      db.evaluateAchievements(owner);
       boolean retry = false;
       for (Observation record : db.list(owner))
         if (record.hasGps() && record.place().trim().isEmpty())
@@ -184,6 +199,37 @@ public final class Repository {
         }
         db.mergeRemote(data, owner, photo);
       }
+      db.evaluateAchievements(owner);
+      JSONArray earned = new JSONArray();
+      for (Map.Entry<String, String> entry : db.earned(owner).entrySet()) {
+        JSONObject badge = new JSONObject();
+        Observation.put(badge, "badge", entry.getKey());
+        Observation.put(badge, "earnedAt", entry.getValue());
+        earned.put(badge);
+      }
+      JSONObject ledger = new JSONObject();
+      Observation.put(ledger, "achievements", earned);
+      JSONArray unlocks =
+          api.json("/api/social/achievements", "PUT", cookie, ledger).getJSONArray("achievements");
+      for (int i = 0; i < unlocks.length(); i++) {
+        JSONObject b = unlocks.getJSONObject(i);
+        db.earn(owner, b.getString("badge"), b.getString("earnedAt"));
+      }
+      android.content.SharedPreferences preferences = TrailPreferences.of(context, owner);
+      if (preferences.getBoolean("avatarPending", false)) {
+        String sent = preferences.getString("avatar", "{}");
+        api.json("/api/social/avatar", "PUT", cookie, new JSONObject(sent));
+        if (sent.equals(preferences.getString("avatar", "{}")))
+          preferences.edit().putBoolean("avatarPending", false).apply();
+      }
+      JSONObject community =
+          api.json("/api/social/me", "GET", cookie, null).getJSONObject("profile");
+      if (!preferences.getBoolean("avatarPending", false))
+        preferences
+            .edit()
+            .putString("avatar", community.optJSONObject("avatar").toString())
+            .putString("username", community.optString("username"))
+            .apply();
       return !retry;
     }
   }
@@ -240,6 +286,17 @@ public final class Repository {
       db.save(new Observation(item, owner, file, true, ""));
       count++;
     }
+    JSONObject badges = backup.optJSONObject("achievements");
+    if (badges != null)
+      for (java.util.Iterator<String> keys = badges.keys(); keys.hasNext(); ) {
+        String key = keys.next();
+        if (key.matches("[a-z0-9 -]{1,80}"))
+          try {
+            java.time.Instant.parse(badges.optString(key));
+            db.earn(owner, key, badges.optString(key));
+          } catch (Exception ignored) {
+          }
+      }
     enqueue();
     return count;
   }

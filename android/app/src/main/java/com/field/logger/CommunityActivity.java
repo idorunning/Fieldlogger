@@ -43,7 +43,11 @@ public final class CommunityActivity extends AppCompatActivity {
   private LinearLayout shell, nav, preview;
   private MapView map;
   private String mode = "map", scope = "own", category = "all", author = "", photoId = "";
-  private boolean topAcorns = false, expanded = false;
+  private boolean topAcorns = false, expanded = false, hotAreas = false;
+  private String photoQuery = "";
+  private ActivityResultLauncher<String> contactsPermission;
+  private LinearLayout contactResults;
+  private TextView bulkStatus;
   private double latitude = 54, longitude = -2, radius = 10;
   private int epoch = 0, mapRequest = 0;
   private final List<JSONObject> visible = new ArrayList<>();
@@ -85,6 +89,16 @@ public final class CommunityActivity extends AppCompatActivity {
           v.setPadding(s.left, s.top, s.right, s.bottom);
           return insets;
         });
+    contactsPermission =
+        registerForActivityResult(
+            new ActivityResultContracts.RequestPermission(),
+            allowed -> {
+              if (allowed) reviewContacts();
+              else
+                toast(
+                    "Contacts permission was declined. You can still search by email or choose a"
+                        + " single contact.");
+            });
     contactPicker =
         registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
@@ -115,6 +129,7 @@ public final class CommunityActivity extends AppCompatActivity {
             new OnBackPressedCallback(true) {
               public void handleOnBackPressed() {
                 if (mode.equals("map")) finish();
+                else if (getIntent().getBooleanExtra("returnToAccount", false)) finish();
                 else showMap();
               }
             });
@@ -136,13 +151,30 @@ public final class CommunityActivity extends AppCompatActivity {
       scope = saved.getString("scope", "own");
       radius = saved.getDouble("radius", 10);
       topAcorns = saved.getBoolean("top");
+      hotAreas = saved.getBoolean("hotAreas");
+      photoQuery = saved.getString("photoQuery", "");
+      category = saved.getString("category", "all");
     }
     if ("publish".equals(requested)) showPublish(photoId);
     else if ("settings".equals(requested)) showSettings();
     else if ("people".equals(requested)) showPeople();
     else if ("published".equals(requested)) showPublished();
     else if ("invite".equals(requested)) showInvite();
-    else {
+    else if ("bulk".equals(requested)) showBulkPublish();
+    else if ("notification".equals(requested)) {
+      LinearLayout waiting = page("notification", "A new discovery", "Opening this shared photo…");
+      work(
+          null,
+          () ->
+              call(
+                  "photos/"
+                      + photoId
+                      + "?"
+                      + getIntent().getStringExtra("at").replaceFirst("^&", ""),
+                  "GET",
+                  null),
+          r -> showPublicPhoto(r.getJSONObject("photo")));
+    } else {
       if ("saved".equals(requested)) scope = "saved";
       showMap();
     }
@@ -181,6 +213,9 @@ public final class CommunityActivity extends AppCompatActivity {
     out.putString("scope", scope);
     out.putDouble("radius", radius);
     out.putBoolean("top", topAcorns);
+    out.putBoolean("hotAreas", hotAreas);
+    out.putString("photoQuery", photoQuery);
+    out.putString("category", category);
     super.onSaveInstanceState(out);
   }
 
@@ -354,7 +389,16 @@ public final class CommunityActivity extends AppCompatActivity {
     LinearLayout h = row();
     h.addView(title(heading), new LinearLayout.LayoutParams(0, -2, 1));
     h.addView(
-        icon("close", "Back to map", this::showMap), new LinearLayout.LayoutParams(dp(48), dp(48)));
+        icon(
+            "close",
+            getIntent().getBooleanExtra("returnToAccount", false)
+                ? "Back to your settings"
+                : "Back to map",
+            () -> {
+              if (getIntent().getBooleanExtra("returnToAccount", false)) finish();
+              else showMap();
+            }),
+        new LinearLayout.LayoutParams(dp(48), dp(48)));
     content.addView(h);
     if (!subtitle.isEmpty()) {
       gap(content, 6);
@@ -482,10 +526,15 @@ public final class CommunityActivity extends AppCompatActivity {
 
   private void showMap() {
     frame("map");
+    TrailPreferences.of(this, repo.owner())
+        .edit()
+        .putFloat("mapLat", (float) latitude)
+        .putFloat("mapLon", (float) longitude)
+        .apply();
     mapStatus = null;
     mapFrame = new FrameLayout(this);
     body.addView(mapFrame, new FrameLayout.LayoutParams(-1, -1));
-    Configuration.getInstance().setUserAgentValue("MyTrailLog/2.2.0 (fieldlogger.co.uk)");
+    Configuration.getInstance().setUserAgentValue("MyTrailLog/2.3.0 (fieldlogger.co.uk)");
     Configuration.getInstance().setOsmdroidBasePath(new File(getCacheDir(), "map"));
     Configuration.getInstance().setOsmdroidTileCache(new File(getCacheDir(), "map/tiles"));
     map = new MapView(this);
@@ -546,9 +595,13 @@ public final class CommunityActivity extends AppCompatActivity {
               rememberCentre();
               loadMap();
             });
+    options.addView(
+        icon("search", "Search postcode, place or discoveries", this::mapSearch),
+        new LinearLayout.LayoutParams(dp(48), dp(48)));
     options.addView(search, new LinearLayout.LayoutParams(0, dp(48), 1));
     options.addView(
-        button(topAcorns ? "Acorns ↓" : "Filters", false, this::mapFilters),
+        button(
+            hotAreas ? "Hot spots" : topAcorns ? "Acorns ↓" : "Filters", false, this::mapFilters),
         new LinearLayout.LayoutParams(-2, dp(48)));
     controls.addView(options);
     mapStatus = text("Finding discoveries…", 12, MUTED, false);
@@ -588,7 +641,7 @@ public final class CommunityActivity extends AppCompatActivity {
       for (Observation r : repo.db.listActive(repo.owner()))
         if (r.hasGps()
             && (scope.equals("own") || r.data.optBoolean("checkLater"))
-            && (category.equals("all") || category.equals(r.category()))) visible.add(ownPhoto(r));
+            && matchesPhoto(r.data)) visible.add(ownPhoto(r));
     }
     if (scope.equals("own")) {
       renderMarkers();
@@ -610,7 +663,9 @@ public final class CommunityActivity extends AppCompatActivity {
             + radius
             + "&category="
             + category
-            + (topAcorns ? "&sort=acorns" : "");
+            + (topAcorns ? "&sort=acorns" : "")
+            + "&query="
+            + Uri.encode(photoQuery);
     work(
         null,
         () -> call(path, "GET", null),
@@ -642,11 +697,16 @@ public final class CommunityActivity extends AppCompatActivity {
         continue;
       }
       String key =
-          String.format(Locale.US, "%.5f,%.5f", p.optDouble("latitude"), p.optDouble("longitude"));
+          String.format(
+              Locale.US,
+              hotAreas ? "%.2f,%.2f" : "%.5f,%.5f",
+              p.optDouble("latitude"),
+              p.optDouble("longitude"));
       groups.computeIfAbsent(key, k -> new ArrayList<>()).add(p);
     }
     List<List<JSONObject>> ordered = new ArrayList<>(groups.values());
     Collections.reverse(ordered);
+    if (hotAreas) ordered.sort((a, b) -> Integer.compare(a.size(), b.size()));
     final MapView current = map;
     for (List<JSONObject> group : ordered) {
       JSONObject p = group.get(0);
@@ -667,7 +727,7 @@ public final class CommunityActivity extends AppCompatActivity {
                         + group.get(i).optInt("acorns")
                         + " acorns";
               new AlertDialog.Builder(this)
-                  .setTitle("Discoveries here")
+                  .setTitle(hotAreas ? group.size() + " photos in this area" : "Discoveries here")
                   .setItems(choices, (d, n) -> showPreview(group.get(n)))
                   .show();
             }
@@ -701,7 +761,10 @@ public final class CommunityActivity extends AppCompatActivity {
     mapStatus.setText(
         visible.size()
             + " discoveries"
-            + (topAcorns ? " · most acorns first" : "")
+            + (hotAreas
+                ? " · " + groups.size() + " photographed areas"
+                : topAcorns ? " · most acorns first" : "")
+            + (!photoQuery.isBlank() ? " · " + photoQuery : "")
             + (noGps > 0 ? " · " + noGps + " without GPS" : "")
             + " · View list");
     mapStatus.setOnClickListener(v -> showMapList());
@@ -759,9 +822,16 @@ public final class CommunityActivity extends AppCompatActivity {
     acorns.setText("Most acorns first");
     acorns.setChecked(topAcorns);
     panel.addView(acorns);
+    CheckBox areas = new CheckBox(this);
+    areas.setText("Most photographed areas (about 1 km cells)");
+    areas.setChecked(hotAreas);
+    panel.addView(areas);
+    panel.addView(
+        text("Counts use the photos visible to you in this result set.", 12, MUTED, false));
     Spinner types = new Spinner(this);
-    String[] choices = new String[Observation.CATEGORIES.length + 1];
+    String[] choices = new String[Observation.CATEGORIES.length + 2];
     choices[0] = "all";
+    choices[choices.length - 1] = "trees";
     System.arraycopy(Observation.CATEGORIES, 0, choices, 1, Observation.CATEGORIES.length);
     types.setAdapter(
         new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, choices));
@@ -791,6 +861,7 @@ public final class CommunityActivity extends AppCompatActivity {
             (d, w) -> {
               category = choices[types.getSelectedItemPosition()];
               topAcorns = acorns.isChecked();
+              hotAreas = areas.isChecked();
               radius = range.getProgress() + 1;
               rememberCentre();
               showMap();
@@ -867,8 +938,8 @@ public final class CommunityActivity extends AppCompatActivity {
     photo.addView(im, new FrameLayout.LayoutParams(-1, -1));
     image(p, im);
     FrameLayout.LayoutParams ap =
-        new FrameLayout.LayoutParams(-2, dp(48), Gravity.TOP | Gravity.END);
-    ap.setMargins(0, dp(8), dp(8), 0);
+        new FrameLayout.LayoutParams(-2, dp(48), Gravity.BOTTOM | Gravity.END);
+    ap.setMargins(0, 0, dp(8), dp(8));
     photo.addView(acorn(p), ap);
     card.addView(photo, new LinearLayout.LayoutParams(-1, 0, 1));
     TextView name = title(p.optString("name", "A discovery"));
@@ -910,12 +981,17 @@ public final class CommunityActivity extends AppCompatActivity {
         page("photo", p.optString("name", "A discovery"), p.optString("scientificName"));
     ImageView im = new ImageView(this);
     im.setScaleType(ImageView.ScaleType.CENTER_CROP);
-    content.addView(im, new LinearLayout.LayoutParams(-1, dp(360)));
+    FrameLayout photo = new FrameLayout(this);
+    photo.addView(im, new FrameLayout.LayoutParams(-1, -1));
+    FrameLayout.LayoutParams nut =
+        new FrameLayout.LayoutParams(-2, dp(48), Gravity.BOTTOM | Gravity.END);
+    nut.setMargins(0, 0, dp(10), dp(10));
+    photo.addView(acorn(p), nut);
+    content.addView(photo, new LinearLayout.LayoutParams(-1, dp(360)));
     image(p, im);
     gap(content, 12);
     JSONObject person = p.optJSONObject("author");
     LinearLayout actions = row();
-    actions.addView(acorn(p), new LinearLayout.LayoutParams(-2, dp(48)));
     TextView later =
         button(p.optBoolean("checkLater") ? "Saved for later" : "Check out later", false, () -> {});
     later.setOnClickListener(
@@ -1075,6 +1151,7 @@ public final class CommunityActivity extends AppCompatActivity {
     content.addView(search);
     gap(content, 8);
     LinearLayout result = column();
+    contactResults = result;
     content.addView(
         button(
             "Search explorers",
@@ -1096,6 +1173,8 @@ public final class CommunityActivity extends AppCompatActivity {
                     () -> call("users?following=true", "GET", null),
                     r -> userRows(result, r.getJSONArray("users")))));
     gap(content, 18);
+    content.addView(button("Review my phone contacts", true, this::requestContacts));
+    gap(content, 12);
     EditText emails = emailField(content, "Friend’s email address");
     content.addView(
         text(
@@ -1139,13 +1218,142 @@ public final class CommunityActivity extends AppCompatActivity {
               false));
     for (int i = 0; i < users.length(); i++) {
       JSONObject p = users.getJSONObject(i);
-      list.addView(
-          button(
+      LinearLayout tile = row();
+      tile.setPadding(dp(10), dp(8), dp(10), dp(8));
+      tile.setBackground(shape(0xffecf0e2, 16));
+      tile.addView(
+          new AvatarView(this, personAvatar(p)), new LinearLayout.LayoutParams(dp(54), dp(54)));
+      TextView name =
+          text(
               "@" + p.optString("username") + (p.optInt("following") == 1 ? " · Following" : ""),
-              false,
-              () -> showUser(p)));
+              16,
+              GREEN,
+              true);
+      name.setPadding(dp(12), 0, 0, 0);
+      tile.addView(name, new LinearLayout.LayoutParams(0, -2, 1));
+      tile.setOnClickListener(v -> showUser(p));
+      list.addView(tile);
       gap(list, 10);
     }
+  }
+
+  private JSONObject personAvatar(JSONObject p) {
+    JSONObject a = p.optJSONObject("avatar");
+    if (a != null) return a;
+    try {
+      return new JSONObject(p.optString("avatar", "{}"));
+    } catch (Exception e) {
+      return new JSONObject();
+    }
+  }
+
+  private void requestContacts() {
+    if (androidx.core.content.ContextCompat.checkSelfPermission(
+            this, android.Manifest.permission.READ_CONTACTS)
+        == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+      reviewContacts();
+      return;
+    }
+    new AlertDialog.Builder(this)
+        .setTitle("Find members in your contacts")
+        .setMessage(
+            "Allow access to review contact names and email addresses on this phone. You choose"
+                + " which addresses to search; nothing is sent until you tap Find members. Only"
+                + " people who opted into email discovery can be found.")
+        .setPositiveButton(
+            "Continue",
+            (d, w) -> contactsPermission.launch(android.Manifest.permission.READ_CONTACTS))
+        .setNegativeButton("Cancel", null)
+        .show();
+  }
+
+  private void reviewContacts() {
+    final int page = epoch;
+    Repository.IO.execute(
+        () -> {
+          LinkedHashMap<String, String> entries = new LinkedHashMap<>();
+          try (Cursor cursor =
+              getContentResolver()
+                  .query(
+                      ContactsContract.CommonDataKinds.Email.CONTENT_URI,
+                      new String[] {
+                        ContactsContract.CommonDataKinds.Email.ADDRESS,
+                        ContactsContract.CommonDataKinds.Email.DISPLAY_NAME
+                      },
+                      null,
+                      null,
+                      ContactsContract.CommonDataKinds.Email.DISPLAY_NAME + " ASC")) {
+            if (cursor != null)
+              while (cursor.moveToNext() && entries.size() < 1000) {
+                String email = cursor.getString(0);
+                if (email != null
+                    && android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches())
+                  entries.putIfAbsent(email.trim().toLowerCase(Locale.ROOT), cursor.getString(1));
+              }
+          } catch (Exception e) {
+            runOnUiThread(
+                () -> toast("Could not read contacts. You can still choose an email address."));
+            return;
+          }
+          runOnUiThread(
+              () -> {
+                if (page != epoch || isFinishing()) return;
+                if (entries.isEmpty()) {
+                  toast("No contact email addresses on this phone.");
+                  return;
+                }
+                List<String> emails = new ArrayList<>(entries.keySet());
+                String[] names = new String[emails.size()];
+                boolean[] chosen = new boolean[emails.size()];
+                for (int i = 0; i < names.length; i++)
+                  names[i] =
+                      (entries.get(emails.get(i)) == null ? "Contact" : entries.get(emails.get(i)))
+                          + " · "
+                          + emails.get(i);
+                new AlertDialog.Builder(this)
+                    .setTitle("Choose contacts to search (up to 300)")
+                    .setMultiChoiceItems(names, chosen, (d, n, checked) -> chosen[n] = checked)
+                    .setPositiveButton(
+                        "Find members",
+                        (d, w) -> {
+                          List<String> selected = new ArrayList<>();
+                          for (int i = 0; i < chosen.length; i++)
+                            if (chosen[i]) selected.add(emails.get(i));
+                          if (selected.isEmpty()) {
+                            toast("Choose at least one contact.");
+                            return;
+                          }
+                          if (selected.size() > 300) {
+                            toast("Choose up to 300 addresses per search.");
+                            return;
+                          }
+                          work(
+                              null,
+                              () -> {
+                                JSONArray found = new JSONArray();
+                                HashSet<String> ids = new HashSet<>();
+                                for (int start = 0; start < selected.size(); start += 30) {
+                                  JSONArray batch = new JSONArray();
+                                  for (String email :
+                                      selected.subList(
+                                          start, Math.min(start + 30, selected.size())))
+                                    batch.put(email);
+                                  JSONArray users =
+                                      call("contacts", "POST", data("emails", batch))
+                                          .getJSONArray("users");
+                                  for (int j = 0; j < users.length(); j++) {
+                                    JSONObject person = users.getJSONObject(j);
+                                    if (ids.add(person.optString("id"))) found.put(person);
+                                  }
+                                }
+                                return data("users", found);
+                              },
+                              r -> userRows(contactResults, r.getJSONArray("users")));
+                        })
+                    .setNegativeButton("Cancel", null)
+                    .show();
+              });
+        });
   }
 
   private EditText emailField(LinearLayout content, String hint) {
@@ -1191,6 +1399,9 @@ public final class CommunityActivity extends AppCompatActivity {
             "person",
             "@" + person.optString("username"),
             "A shared scrapbook. Private entries stay private.");
+    content.addView(
+        new AvatarView(this, personAvatar(person)), new LinearLayout.LayoutParams(dp(96), dp(96)));
+    gap(content, 12);
     TextView follow = button("Follow / unfollow", false, () -> {});
     content.addView(follow);
     follow.setOnClickListener(
@@ -1255,6 +1466,24 @@ public final class CommunityActivity extends AppCompatActivity {
             "Your trail circle",
             "Your username is your public identity. Your account name and email stay private.");
     if (!signedIn(content, this::showSettings)) return;
+    AvatarView portrait = new AvatarView(this, TrailPreferences.avatar(this, repo.owner()));
+    content.addView(portrait, new LinearLayout.LayoutParams(dp(100), dp(100)));
+    JSONObject[] selectedAvatar = {TrailPreferences.avatar(this, repo.owner())};
+    content.addView(
+        button(
+            "Personalise my avatar",
+            false,
+            () ->
+                AvatarPicker.show(
+                    this,
+                    selectedAvatar[0],
+                    a -> {
+                      selectedAvatar[0] = a;
+                      portrait.update(a);
+                      TrailPreferences.avatar(this, repo.owner(), a);
+                      repo.enqueue();
+                    })));
+    gap(content, 14);
     EditText username = input("Username");
     content.addView(username);
     CheckBox searchable = new CheckBox(this);
@@ -1275,11 +1504,23 @@ public final class CommunityActivity extends AppCompatActivity {
         v -> {
           JSONObject p = data("username", username.getText().toString().trim());
           Observation.put(p, "discoverable", searchable.isChecked());
-          work(save, () -> call("me", "PUT", p), r -> toast("Community profile saved."));
+          Observation.put(p, "avatar", selectedAvatar[0]);
+          work(
+              save,
+              () -> call("me", "PUT", p),
+              r -> {
+                TrailPreferences.of(this, repo.owner())
+                    .edit()
+                    .putString("username", username.getText().toString().trim())
+                    .apply();
+                toast("Community profile saved.");
+              });
         });
     content.addView(save);
     gap(content, 20);
     content.addView(button("My published photos", false, this::showPublished));
+    gap(content, 10);
+    content.addView(button("Journal & app settings", false, () -> journalPage("account")));
     gap(content, 10);
     content.addView(
         button(
@@ -1303,6 +1544,10 @@ public final class CommunityActivity extends AppCompatActivity {
           profile = r.getJSONObject("profile");
           username.setText(profile.optString("username"));
           searchable.setChecked(profile.optBoolean("discoverable"));
+          if (!TrailPreferences.of(this, repo.owner()).getBoolean("avatarPending", false)) {
+            selectedAvatar[0] = personAvatar(profile);
+            portrait.update(selectedAvatar[0]);
+          }
           save.setEnabled(true);
           if (profile.optBoolean("isModerator")) {
             gap(content, 18);
@@ -1350,6 +1595,10 @@ public final class CommunityActivity extends AppCompatActivity {
             "Shared by you",
             "Unpublish at any time. Your original photo stays in your private journal.");
     if (!signedIn(content, this::showPublished)) return;
+    content.addView(button("Publish all journal photos", false, this::showBulkPublish));
+    gap(content, 8);
+    content.addView(button("Unpublish all photos", false, this::confirmUnpublishAll));
+    gap(content, 18);
     work(
         null,
         () -> call("published", "GET", null),
@@ -1834,6 +2083,363 @@ public final class CommunityActivity extends AppCompatActivity {
             gap(content, 24);
           }
         });
+  }
+
+  private boolean matchesPhoto(JSONObject p) {
+    boolean type = category.equals("all") || category.equals(p.optString("category"));
+    String name = p.optString("name") + " " + p.optString("scientificName");
+    if (category.equals("trees"))
+      type =
+          name.toLowerCase(Locale.ROOT)
+              .matches(
+                  ".*\\b(oak|beech|pine|birch|willow|ash|holly|hazel|sycamore|yew|rowan|chestnut|maple|alder|tree|cedar|elm|spruce|fir|larch)\\b.*");
+    return type
+        && (name + " " + p.optString("place") + " " + p.optString("category"))
+            .toLowerCase(Locale.ROOT)
+            .contains(photoQuery.toLowerCase(Locale.ROOT));
+  }
+
+  private void mapSearch() {
+    LinearLayout fields = column();
+    fields.setPadding(dp(20), dp(8), dp(20), dp(12));
+    EditText place = input("UK postcode or place name"),
+        photo = input("Species or discovery, e.g. oak, robin");
+    photo.setText(photoQuery);
+    fields.addView(place);
+    gap(fields, 10);
+    fields.addView(photo);
+    gap(fields, 10);
+    TextView find = button("Find postcode or place", true, () -> {});
+    fields.addView(find);
+    fields.addView(
+        text(
+            "Use Filters for plants, trees, top acorns and the most photographed areas.",
+            13,
+            MUTED,
+            false));
+    AlertDialog dialog =
+        new AlertDialog.Builder(this)
+            .setTitle("Explore somewhere")
+            .setView(fields)
+            .setPositiveButton(
+                "Filter photos",
+                (d, w) -> {
+                  photoQuery = photo.getText().toString().trim();
+                  rememberCentre();
+                  showMap();
+                })
+            .setNeutralButton(
+                "Clear photo search",
+                (d, w) -> {
+                  photoQuery = "";
+                  rememberCentre();
+                  showMap();
+                })
+            .setNegativeButton("Cancel", null)
+            .create();
+    find.setOnClickListener(
+        v -> {
+          String query = place.getText().toString().trim();
+          if (query.length() < 2) {
+            place.setError("Enter a postcode or place");
+            return;
+          }
+          work(
+              find,
+              () ->
+                  repo.api.json(
+                      "/api/map-search?query=" + Uri.encode(query), "GET", cookie(), null),
+              r -> {
+                JSONArray results = r.getJSONArray("places");
+                if (results.length() == 0) {
+                  toast("No place found. Try a nearby town or full postcode.");
+                  return;
+                }
+                String[] names = new String[results.length()];
+                for (int i = 0; i < names.length; i++)
+                  names[i] = results.getJSONObject(i).optString("name");
+                new AlertDialog.Builder(this)
+                    .setTitle("Go to a place")
+                    .setItems(
+                        names,
+                        (d, n) -> {
+                          JSONObject p = results.optJSONObject(n);
+                          latitude = p.optDouble("latitude");
+                          longitude = p.optDouble("longitude");
+                          getPreferences(0)
+                              .edit()
+                              .putFloat("lat", (float) latitude)
+                              .putFloat("lon", (float) longitude)
+                              .apply();
+                          photoQuery = photo.getText().toString().trim();
+                          dialog.dismiss();
+                          showMap();
+                        })
+                    .show();
+              });
+        });
+    dialog.show();
+  }
+
+  private void confirmUnpublishAll() {
+    new AlertDialog.Builder(this)
+        .setTitle("Unpublish every photo?")
+        .setMessage(
+            "This removes ALL your published photos from shared maps and journals, including local"
+                + " sharing and private invitation links. It also cancels any bulk publishing in"
+                + " progress. Your original journal photos and achievements stay safe. You can"
+                + " choose to publish again later.")
+        .setPositiveButton(
+            "Unpublish all",
+            (d, w) -> {
+              BulkPublishWorker.cancel(this, repo.owner());
+              work(
+                  null,
+                  () -> call("unpublish-all", "POST", data("confirm", true)),
+                  r -> {
+                    repo.enqueue();
+                    toast("All shared photos are unpublished.");
+                    showPublished();
+                  });
+            })
+        .setNegativeButton("Keep sharing", null)
+        .show();
+  }
+
+  private void showBulkPublish() {
+    LinearLayout content =
+        page(
+            "bulk",
+            "Share your scrapbook",
+            "A one-off batch for your current journal. New photos stay private until you choose to"
+                + " share them.");
+    if (!signedIn(content, this::showBulkPublish)) return;
+    bulkStatus = text("", 15, GREEN, true);
+    content.addView(bulkStatus);
+    refreshBulkStatus();
+    List<Observation> active = repo.db.listActive(repo.owner());
+    content.addView(
+        text(
+            active.size()
+                + " active photos. Every photo must pass the people and safety checks. Blocked"
+                + " photos stay private.",
+            15,
+            MUTED,
+            false));
+    gap(content, 12);
+    RadioGroup audience = new RadioGroup(this);
+    int everyone = View.generateViewId(),
+        local = View.generateViewId(),
+        people = View.generateViewId();
+    int[] ids = {everyone, local, people};
+    String[] options = {
+      "Everyone signed in", "Local — my chosen map area", "Specific people — email invitations"
+    };
+    for (int i = 0; i < 3; i++) {
+      RadioButton option = new RadioButton(this);
+      option.setId(ids[i]);
+      option.setText(options[i]);
+      option.setTextColor(GREEN);
+      option.setMinHeight(dp(52));
+      audience.addView(option);
+    }
+    content.addView(audience);
+    double[] circle = {latitude, longitude, 10};
+    LinearLayout circlePanel = column();
+    TextView area = text("Local radius: 10 km", 15, GREEN, true);
+    circlePanel.addView(area);
+    circlePanel.addView(
+        button(
+            "Choose local area",
+            false,
+            () ->
+                chooseCircle(
+                    circle,
+                    () ->
+                        area.setText(
+                            "Local radius: "
+                                + (int) circle[2]
+                                + " km · "
+                                + String.format(Locale.UK, "%.3f, %.3f", circle[0], circle[1])))));
+    content.addView(circlePanel);
+    circlePanel.setVisibility(View.GONE);
+    LinearLayout invitePanel = column();
+    EditText recipients = emailField(invitePanel, "Email addresses");
+    content.addView(invitePanel);
+    invitePanel.setVisibility(View.GONE);
+    audience.setOnCheckedChangeListener(
+        (g, id) -> {
+          circlePanel.setVisibility(id == local ? View.VISIBLE : View.GONE);
+          invitePanel.setVisibility(id == people ? View.VISIBLE : View.GONE);
+        });
+    CheckBox consent = new CheckBox(this);
+    consent.setText(
+        "I agree to publish these photos, their locations, dates and stories to this audience under"
+            + " the sharing guidelines.");
+    consent.setTextColor(GREEN);
+    content.addView(consent);
+    content.addView(
+        button("Sharing guidelines", false, () -> open(Api.ORIGIN + "/community-rules")));
+    gap(content, 14);
+    TextView start = button("Publish all current photos", true, () -> {});
+    content.addView(start);
+    start.setOnClickListener(
+        v -> {
+          if (audience.getCheckedRadioButtonId() == -1 || !consent.isChecked()) {
+            toast("Choose an audience and accept sharing first.");
+            return;
+          }
+          if (active.isEmpty()) {
+            toast("Your journal has no active photos.");
+            return;
+          }
+          try {
+            JSONObject previous =
+                new JSONObject(TrailPreferences.of(this, repo.owner()).getString("bulkJob", "{}"));
+            if (previous.optString("state").equals("running")) {
+              toast("A batch is already in progress. Wait or unpublish all to cancel it.");
+              return;
+            }
+          } catch (Exception ignored) {
+          }
+          String choice =
+              audience.getCheckedRadioButtonId() == local
+                  ? "local"
+                  : audience.getCheckedRadioButtonId() == people ? "people" : "everyone";
+          JSONArray addresses = emails(recipients);
+          if (choice.equals("people") && addresses.length() == 0) {
+            toast("Add at least one recipient email.");
+            return;
+          }
+          new AlertDialog.Builder(this)
+              .setTitle("Publish " + active.size() + " photos?")
+              .setMessage(
+                  "Your selected audience will see each approved photo with its location and date."
+                      + " Existing sharing choices will be replaced for these photos. This may take"
+                      + " several minutes; uploads continue when connected.")
+              .setPositiveButton(
+                  "Start publishing",
+                  (d, w) ->
+                      work(
+                          start,
+                          () -> {
+                            JSONObject me = call("me", "GET", null),
+                                payload = data("audience", choice);
+                            Observation.put(payload, "agree", true);
+                            Observation.put(payload, "emails", addresses);
+                            Observation.put(payload, "latitude", circle[0]);
+                            Observation.put(payload, "longitude", circle[1]);
+                            Observation.put(payload, "radiusKm", circle[2]);
+                            Observation.put(payload, "bulkEpoch", me.optLong("bulkEpoch"));
+                            JSONObject job = data("state", "running");
+                            Observation.put(job, "token", java.util.UUID.randomUUID().toString());
+                            JSONArray photos = new JSONArray();
+                            for (Observation r : active) photos.put(r.id());
+                            Observation.put(job, "ids", photos);
+                            Observation.put(job, "payload", payload);
+                            TrailPreferences.of(this, repo.owner())
+                                .edit()
+                                .putString("bulkJob", job.toString())
+                                .commit();
+                            BulkPublishWorker.enqueue(this, repo.owner());
+                            return data("ok", true);
+                          },
+                          r -> {
+                            refreshBulkStatus();
+                            toast(
+                                "Publishing queued. Photos that pass the check will appear for your"
+                                    + " chosen audience.");
+                          }))
+              .setNegativeButton("Cancel", null)
+              .show();
+        });
+    gap(content, 12);
+    content.addView(
+        button(
+            "Send completed private invitations",
+            false,
+            () -> {
+              try {
+                JSONObject job =
+                    new JSONObject(
+                        TrailPreferences.of(this, repo.owner()).getString("bulkJob", "{}"));
+                JSONArray all = job.optJSONArray("invitations");
+                if (all == null || all.length() == 0) {
+                  toast("No private invitations are ready yet.");
+                  return;
+                }
+                sendBatchInvites(all);
+              } catch (Exception e) {
+                toast("Invitations are not ready yet.");
+              }
+            }));
+    gap(content, 12);
+    content.addView(button("Unpublish all / cancel this batch", false, this::confirmUnpublishAll));
+    androidx.work.WorkManager.getInstance(this)
+        .getWorkInfosForUniqueWorkLiveData("bulk-publish-" + repo.owner())
+        .observe(
+            this,
+            work -> {
+              if (mode.equals("bulk")) refreshBulkStatus();
+            });
+  }
+
+  private void refreshBulkStatus() {
+    if (bulkStatus == null) return;
+    try {
+      JSONObject j =
+          new JSONObject(TrailPreferences.of(this, repo.owner()).getString("bulkJob", "{}"));
+      JSONArray ids = j.optJSONArray("ids");
+      bulkStatus.setText(
+          ids == null
+              ? "No batch in progress"
+              : j.optString("state")
+                  + " · "
+                  + j.optInt("next")
+                  + " / "
+                  + ids.length()
+                  + " checked\n"
+                  + j.optInt("published")
+                  + " published · "
+                  + j.optInt("blocked")
+                  + " blocked · "
+                  + j.optInt("skipped")
+                  + " skipped");
+    } catch (Exception e) {
+      bulkStatus.setText("No batch in progress");
+    }
+  }
+
+  private void sendBatchInvites(JSONArray invitations) throws Exception {
+    Map<String, List<String>> perPerson = new LinkedHashMap<>();
+    for (int i = 0; i < invitations.length(); i++) {
+      JSONObject invite = invitations.getJSONObject(i);
+      perPerson
+          .computeIfAbsent(invite.getString("email"), k -> new ArrayList<>())
+          .add(invite.getString("url"));
+    }
+    String[] recipients = perPerson.keySet().toArray(new String[0]);
+    new AlertDialog.Builder(this)
+        .setTitle("Send each person their invitation links")
+        .setItems(
+            recipients,
+            (d, n) -> {
+              Intent email =
+                  new Intent(
+                      Intent.ACTION_SENDTO, Uri.parse("mailto:" + Uri.encode(recipients[n])));
+              email.putExtra(Intent.EXTRA_SUBJECT, "Discoveries for you · My Trail Log");
+              email.putExtra(
+                  Intent.EXTRA_TEXT,
+                  "Sign in with this email to open my shared discoveries:\n\n"
+                      + String.join("\n", perPerson.get(recipients[n])));
+              try {
+                startActivity(email);
+              } catch (ActivityNotFoundException e) {
+                toast("No email app installed.");
+              }
+            })
+        .setNegativeButton("Close", null)
+        .show();
   }
 
   private void open(String url) {

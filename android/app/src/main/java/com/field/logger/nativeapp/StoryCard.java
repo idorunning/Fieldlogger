@@ -118,7 +118,8 @@ public final class StoryCard {
     text(c, shortCopy(summary, 140), 66, 1026, 948, 30, INK, 2, Typeface.DEFAULT);
     String detail = "";
     if (ai != null) {
-      detail = ai.optString("seasonalContext");
+      detail = ai.optString("interestingFact");
+      if (detail.isBlank()) detail = ai.optString("seasonalContext");
       if (detail.isBlank()) detail = ai.optString("lookCloser");
       if (detail.isBlank() && ai.optJSONArray("identifyingFeatures") != null)
         detail = ai.optJSONArray("identifyingFeatures").optString(0);

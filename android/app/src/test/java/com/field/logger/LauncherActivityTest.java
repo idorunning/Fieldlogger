@@ -41,6 +41,8 @@ public class LauncherActivityTest {
   }
 
   private View find(View view, String description) {
+    if (view instanceof TextView && ((TextView) view).getText().toString().equals(description))
+      return view;
     if (view.getContentDescription() != null
         && description.contentEquals(view.getContentDescription())) return view;
     if (view instanceof ViewGroup) {
@@ -89,6 +91,7 @@ public class LauncherActivityTest {
       View root = app.getWindow().getDecorView();
       assertTrue(hasText(root, "Your field journal"));
       assertNotNull(find(root, "Camera"));
+      assertNull(find(root, "Add from gallery"));
       assertNull(find(root, "Identification settings"));
       assertFalse(hasText(root, "API key"));
       assertNull(Shadows.shadowOf(app).getNextStartedActivity());
@@ -105,7 +108,7 @@ public class LauncherActivityTest {
       find(root, "Collection").performClick();
       assertTrue(hasText(root, "Your collection"));
       find(root, "Milestones").performClick();
-      assertTrue(hasText(root, "Stay curious"));
+      assertTrue(hasText(root, "explorer"));
       find(root, "Journal").performClick();
       assertTrue(hasText(root, "Your field journal"));
       assertNull(Shadows.shadowOf(app).getNextStartedActivity());
@@ -116,15 +119,17 @@ public class LauncherActivityTest {
   public void nativeAccountFormUsesExistingFieldLoggerLogin() {
     try (ActivityController<LauncherActivity> controller = start()) {
       LauncherActivity app = controller.get();
-      find(app.getWindow().getDecorView(), "Your account").performClick();
+      View root = app.getWindow().getDecorView();
+      find(root, "Your profile and settings").performClick();
+      assertTrue(hasText(root, "Your community"));
+      assertTrue(hasText(root, "Your journal"));
+      assertTrue(hasText(root, "App preferences"));
+      assertTrue(hasText(root, "Archive"));
+      assertTrue(hasText(root, "Sync now"));
+      assertNull(org.robolectric.shadows.ShadowDialog.getLatestDialog());
+      find(root, "Sign in or register. Sync your journal and join your trail circle")
+          .performClick();
       androidx.appcompat.app.AlertDialog dialog =
-          (androidx.appcompat.app.AlertDialog)
-              org.robolectric.shadows.ShadowDialog.getLatestDialog();
-      assertNotNull(dialog);
-      assertTrue(dialog.isShowing());
-      assertEquals("Archive", dialog.getListView().getAdapter().getItem(1));
-      dialog.getListView().performItemClick(dialog.getListView().getChildAt(0), 0, 0);
-      dialog =
           (androidx.appcompat.app.AlertDialog)
               org.robolectric.shadows.ShadowDialog.getLatestDialog();
       assertTrue(hasText(dialog.getWindow().getDecorView(), "Welcome back"));

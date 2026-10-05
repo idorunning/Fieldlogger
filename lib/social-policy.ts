@@ -52,7 +52,7 @@ export function publicSnapshot(data: any) {
     capturedAt:String(data.capturedAt),localDate:String(data.localDate),timezone:String(data.timezone),
     latitude:typeof data.latitude==='number'?data.latitude:null,longitude:typeof data.longitude==='number'?data.longitude:null,
     summary:String(ai?.summary||'A moment outdoors, saved in a trail journal.').slice(0,500),
-    interestingInfo:String(ai?.seasonalContext||ai?.lookCloser||'').slice(0,500),
+    interestingInfo:String(ai?.interestingFact||ai?.seasonalContext||ai?.lookCloser||'').slice(0,500),
     confidence:ai?.confidence||null,
   };
 }

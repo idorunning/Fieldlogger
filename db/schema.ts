@@ -46,7 +46,13 @@ export const profiles = sqliteTable('profiles', {
   username: text('username').notNull().unique(),
   discoverable: integer('discoverable').notNull().default(0),
   termsAt: text('terms_at'),
+  avatar: text('avatar').notNull().default('{}'),
 });
+export const achievements = sqliteTable('achievement_unlocks', {
+  userId: text('user_id').notNull().references(() => users.id,{onDelete:'cascade'}),
+  badge: text('badge').notNull(),
+  earnedAt: text('earned_at').notNull(),
+}, t=>[primaryKey({columns:[t.userId,t.badge]})]);
 export const publications = sqliteTable('publications', {
   observationId: text('observation_id').primaryKey().references(() => observations.id, {onDelete:'cascade'}),
   ownerId: text('owner_id').notNull().references(() => users.id, {onDelete:'cascade'}),

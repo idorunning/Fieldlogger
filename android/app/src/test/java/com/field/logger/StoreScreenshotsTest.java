@@ -99,6 +99,12 @@ public class StoreScreenshotsTest {
           ai,
           "seasonalContext",
           "Robins can sing through autumn, when many other birds become quieter.");
+      Observation.put(
+          ai,
+          "interestingFact",
+          example[0].equals("robin")
+              ? "Robins can sing through autumn, when many other birds become quieter."
+              : "A woodland moment brings a new page to your scrapbook.");
       Observation.put(data, "identification", ai);
       repo.db.save(new Observation(data, owner, photo, true, ""));
     }
@@ -106,6 +112,13 @@ public class StoreScreenshotsTest {
         Robolectric.buildActivity(LauncherActivity.class).setup().visible()) {
       LauncherActivity app = controller.get();
       render(app, "01-journal.png");
+      Method account = LauncherActivity.class.getDeclaredMethod("showAccount");
+      account.setAccessible(true);
+      account.invoke(app);
+      render(app, "09-member-settings.png");
+      Method journal = LauncherActivity.class.getDeclaredMethod("showJournal");
+      journal.setAccessible(true);
+      journal.invoke(app);
       Bitmap story = StoryCard.render(context, repo.db.find("store-demo-robin"), true);
       File storyFile =
           new File(

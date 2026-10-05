@@ -18,7 +18,7 @@ public final class JournalDb extends SQLiteOpenHelper {
   }
 
   private JournalDb(Context c) {
-    super(c, "fieldlogger-native.db", null, 1);
+    super(c, "fieldlogger-native.db", null, 2);
   }
 
   @Override
@@ -29,10 +29,46 @@ public final class JournalDb extends SQLiteOpenHelper {
     db.execSQL("CREATE INDEX by_owner ON observations(owner)");
     db.execSQL(
         "CREATE TABLE places(cell TEXT PRIMARY KEY,place TEXT NOT NULL,expires INTEGER NOT NULL)");
+    createAchievements(db);
   }
 
   @Override
-  public void onUpgrade(SQLiteDatabase db, int old, int next) {}
+  public void onUpgrade(SQLiteDatabase db, int old, int next) {
+    if (old < 2) createAchievements(db);
+  }
+
+  private void createAchievements(SQLiteDatabase db) {
+    db.execSQL(
+        "CREATE TABLE IF NOT EXISTS achievements(owner TEXT NOT NULL,badge TEXT NOT NULL,earned_at"
+            + " TEXT NOT NULL,PRIMARY KEY(owner,badge))");
+  }
+
+  public synchronized Map<String, String> earned(String owner) {
+    Map<String, String> result = new LinkedHashMap<>();
+    try (Cursor c =
+        getReadableDatabase()
+            .rawQuery(
+                "SELECT badge,earned_at FROM achievements WHERE owner=?", new String[] {owner})) {
+      while (c.moveToNext()) result.put(c.getString(0), c.getString(1));
+    }
+    return result;
+  }
+
+  public synchronized void earn(String owner, String badge, String when) {
+    ContentValues v = new ContentValues();
+    v.put("owner", owner);
+    v.put("badge", badge);
+    v.put("earned_at", when);
+    getWritableDatabase()
+        .insertWithOnConflict("achievements", null, v, SQLiteDatabase.CONFLICT_IGNORE);
+  }
+
+  public synchronized List<Achievements.Badge> evaluateAchievements(String owner) {
+    List<Achievements.Badge> badges = Achievements.evaluate(list(owner));
+    for (Achievements.Badge b : badges)
+      if (b.complete()) earn(owner, b.id, Instant.now().toString());
+    return badges;
+  }
 
   private Observation read(Cursor c) {
     try {
@@ -193,6 +229,9 @@ public final class JournalDb extends SQLiteOpenHelper {
     v.put("owner", owner);
     v.put("pending", 1);
     getWritableDatabase().update("observations", v, "owner=?", new String[] {"guest"});
+    for (Map.Entry<String, String> entry : earned("guest").entrySet())
+      earn(owner, entry.getKey(), entry.getValue());
+    getWritableDatabase().delete("achievements", "owner=?", new String[] {"guest"});
   }
 
   public synchronized String place(String cell) {
@@ -220,5 +259,6 @@ public final class JournalDb extends SQLiteOpenHelper {
   public synchronized void deleteOwner(String owner) {
     for (Observation r : list(owner)) r.photo.delete();
     getWritableDatabase().delete("observations", "owner=?", new String[] {owner});
+    getWritableDatabase().delete("achievements", "owner=?", new String[] {owner});
   }
 }

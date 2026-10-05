@@ -63,6 +63,12 @@ public final class LauncherActivity extends AppCompatActivity {
   private ActivityResultLauncher<String[]> gallery, backupImport;
   private ActivityResultLauncher<String> export;
   private Runnable afterLocation;
+  private ActivityResultLauncher<String> notificationPermission;
+  private int achievementLayer = -1;
+  private boolean earnedOnly = false;
+  private TextView syncStatus;
+  private WeatherScene weatherScene;
+  private boolean weatherLoading = false;
 
   @Override
   public void onCreate(Bundle state) {
@@ -75,6 +81,17 @@ public final class LauncherActivity extends AppCompatActivity {
     if (Build.VERSION.SDK_INT >= 29) getWindow().setNavigationBarContrastEnforced(false);
     new WindowInsetsControllerCompat(getWindow(), getWindow().getDecorView())
         .setAppearanceLightStatusBars(false);
+    notificationPermission =
+        registerForActivityResult(
+            new ActivityResultContracts.RequestPermission(),
+            ok -> {
+              TrailPreferences.of(this, repo.owner())
+                  .edit()
+                  .putBoolean("notifications", ok)
+                  .apply();
+              if (ok) FollowWorker.schedule(this);
+              if (screen.equals("account")) showAccount();
+            });
     cameraPermission =
         registerForActivityResult(
             new ActivityResultContracts.RequestPermission(),
@@ -117,7 +134,8 @@ public final class LauncherActivity extends AppCompatActivity {
                 if (screen.equals("camera") || screen.equals("review")) {
                   leaveCapture();
                   showJournal();
-                } else if (!screen.equals("journal")) showJournal();
+                } else if (screen.equals("archive") || screen.equals("sources")) showAccount();
+                else if (!screen.equals("journal")) showJournal();
                 else {
                   setEnabled(false);
                   getOnBackPressedDispatcher().onBackPressed();
@@ -186,6 +204,7 @@ public final class LauncherActivity extends AppCompatActivity {
     else if ("login".equals(nativeView)) showLogin(false);
     else if ("collection".equals(nativeView)) showCollection();
     else if ("achievements".equals(nativeView)) showMilestones();
+    else if ("account".equals(nativeView)) showAccount();
     if (observationId != null) {
       Observation selected = repo.db.find(observationId);
       if (selected != null && selected.owner.equals(repo.owner())) showDetail(selected);
@@ -223,6 +242,7 @@ public final class LauncherActivity extends AppCompatActivity {
   protected void onResume() {
     super.onResume();
     if (map != null) map.onResume();
+    if (repo != null) FollowWorker.schedule(this);
     if (screen.equals("archive")) showArchive();
     if (locator != null && locator.granted() && repo != null) {
       List<Observation> recent = new ArrayList<>(repo.db.list(repo.owner()));
@@ -391,12 +411,28 @@ public final class LauncherActivity extends AppCompatActivity {
       bg.setScaleType(ImageView.ScaleType.CENTER_CROP);
       root.addView(bg, new FrameLayout.LayoutParams(-1, -1));
       Glide.with(this).load("file:///android_asset/woodland.jpg").into(bg);
-      View shade = new View(this);
-      shade.setBackground(
-          new GradientDrawable(
-              GradientDrawable.Orientation.TOP_BOTTOM,
-              new int[] {0x99092620, 0x55153627, 0x99102f27}));
-      root.addView(shade, new FrameLayout.LayoutParams(-1, -1));
+      android.content.SharedPreferences preferences = TrailPreferences.of(this, repo.owner());
+      boolean dynamic = preferences.getBoolean("weatherBackground", true);
+      JSONObject weather = new JSONObject();
+      if (dynamic)
+        try {
+          weather = new JSONObject(preferences.getString("weather", "{}"));
+        } catch (Exception ignored) {
+        }
+      if (!dynamic) Observation.put(weather, "fixed", true);
+      boolean fresh =
+          System.currentTimeMillis() - preferences.getLong("weatherAt", 0) < 3 * 3600000L;
+      if (!fresh) weather.remove("condition");
+      boolean effects =
+          dynamic
+              && fresh
+              && preferences.getBoolean("weatherEffects", true)
+              && System.currentTimeMillis() - preferences.getLong("effectAt", 0) > 20 * 60000L;
+      if (Build.VERSION.SDK_INT >= 26 && !android.animation.ValueAnimator.areAnimatorsEnabled())
+        effects = false;
+      weatherScene = new WeatherScene(this, weather, effects);
+      root.addView(weatherScene, new FrameLayout.LayoutParams(-1, -1));
+      if (effects) preferences.edit().putLong("effectAt", System.currentTimeMillis()).apply();
     }
     shell = column();
     shell.setBackgroundColor(woodland ? android.graphics.Color.TRANSPARENT : PAPER);
@@ -412,13 +448,10 @@ public final class LauncherActivity extends AppCompatActivity {
     brand.setContentDescription("Journal home");
     brand.setOnClickListener(v -> showJournal());
     header.addView(brand, new LinearLayout.LayoutParams(0, -2, 1));
-    View account =
-        iconButton(
-            "person",
-            "Your account",
-            woodland ? PAPER : FOREST,
-            woodland ? 0x30173f35 : 0xffeaf0e1,
-            this::showAccount);
+    View account = new AvatarView(this, TrailPreferences.avatar(this, repo.owner()));
+    account.setContentDescription("Your profile and settings");
+    account.setFocusable(true);
+    account.setOnClickListener(v -> showAccount());
     LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(dp(48), dp(48));
     ap.leftMargin = dp(6);
     header.addView(account, ap);
@@ -477,6 +510,7 @@ public final class LauncherActivity extends AppCompatActivity {
     screen = "journal";
     frame(true, true);
     reload();
+    refreshWeather();
   }
 
   private boolean matches(Observation r) {
@@ -515,14 +549,6 @@ public final class LauncherActivity extends AppCompatActivity {
     heading.addView(names, new LinearLayout.LayoutParams(0, -2, 1));
     heading.addView(
         iconButton("search", "Search journal", PAPER, 0x60173f35, this::showFilters),
-        new LinearLayout.LayoutParams(dp(48), dp(48)));
-    heading.addView(
-        iconButton(
-            "gallery",
-            "Add from gallery",
-            PAPER,
-            0x60173f35,
-            () -> gallery.launch(new String[] {"image/*"})),
         new LinearLayout.LayoutParams(dp(48), dp(48)));
     content.addView(heading);
     space(content, 16);
@@ -633,16 +659,16 @@ public final class LauncherActivity extends AppCompatActivity {
     badge.setMargins(dp(10), dp(10), 0, 0);
     photo.addView(kind, badge);
     FrameLayout.LayoutParams acornPosition =
-        new FrameLayout.LayoutParams(-2, dp(48), Gravity.TOP | Gravity.END);
-    acornPosition.setMargins(0, dp(8), dp(8), 0);
+        new FrameLayout.LayoutParams(-2, dp(48), Gravity.BOTTOM | Gravity.END);
+    acornPosition.setMargins(0, 0, dp(8), dp(8));
     photo.addView(ownAcorn(r), acornPosition);
     if (r.pending) {
       TextView local = text("Saved locally", 10, PAPER, false);
       pad(local, 7);
       local.setBackground(shape(0xbb154e45, 15));
       FrameLayout.LayoutParams status =
-          new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.END);
-      status.setMargins(0, 0, dp(10), dp(10));
+          new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.START);
+      status.setMargins(dp(10), 0, 0, dp(10));
       photo.addView(local, status);
     }
     paper.addView(photo, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -667,6 +693,13 @@ public final class LauncherActivity extends AppCompatActivity {
     place.setEllipsize(TextUtils.TruncateAt.END);
     caption.addView(place);
     caption.addView(text(StoryCard.when(r), 11, MUTED, false));
+    JSONObject info = r.data.optJSONObject("identification");
+    if (info != null && !info.optString("interestingFact").isBlank()) {
+      TextView fact = text("✦ " + info.optString("interestingFact"), 12, FOREST, false);
+      fact.setMaxLines(2);
+      fact.setEllipsize(TextUtils.TruncateAt.END);
+      caption.addView(fact);
+    }
     paper.addView(caption);
     return paper;
   }
@@ -769,7 +802,13 @@ public final class LauncherActivity extends AppCompatActivity {
     content.addView(close);
     ImageView image = new ImageView(this);
     image.setScaleType(ImageView.ScaleType.CENTER_CROP);
-    content.addView(image, new LinearLayout.LayoutParams(-1, dp(420)));
+    FrameLayout discoveryPhoto = new FrameLayout(this);
+    discoveryPhoto.addView(image, new FrameLayout.LayoutParams(-1, -1));
+    FrameLayout.LayoutParams acornPlace =
+        new FrameLayout.LayoutParams(-2, dp(48), Gravity.BOTTOM | Gravity.END);
+    acornPlace.setMargins(0, 0, dp(12), dp(12));
+    discoveryPhoto.addView(ownAcorn(record), acornPlace);
+    content.addView(discoveryPhoto, new LinearLayout.LayoutParams(-1, dp(420)));
     Glide.with(this).load(record.photo).into(image);
     LinearLayout details = column();
     pad(details, 22);
@@ -782,7 +821,6 @@ public final class LauncherActivity extends AppCompatActivity {
     space(details, 8);
     details.addView(title(record.name(), 34, FOREST));
     LinearLayout socialActions = row();
-    socialActions.addView(ownAcorn(record), new LinearLayout.LayoutParams(-2, dp(48)));
     TextView later =
         button(
             record.data.optBoolean("checkLater") ? "Saved for later" : "Check out later",
@@ -880,6 +918,7 @@ public final class LauncherActivity extends AppCompatActivity {
               true));
       space(details, 12);
       details.addView(text(ai.optString("summary"), 17, FOREST, false));
+      section(details, "A little wonder", ai.optString("interestingFact"));
       section(
           details, "What to look for", join(ai.optJSONArray("identifyingFeatures"), "• ", "\n"));
       section(details, "Here and now", ai.optString("seasonalContext"));
@@ -1203,84 +1242,116 @@ public final class LauncherActivity extends AppCompatActivity {
     body.removeAllViews();
     LinearLayout content = column();
     pad(content, 20);
-    content.addView(title("Stay curious", 32, FOREST));
+    List<Achievements.Badge> badges = repo.db.evaluateAchievements(repo.owner());
+    Map<String, String> earned = repo.db.earned(repo.owner());
+    int level = Achievements.level(earned.size());
+    if (achievementLayer < 0) achievementLayer = level;
+    achievementLayer = Math.min(level, achievementLayer);
+    content.addView(title(Achievements.LEVELS[level] + " explorer", 32, FOREST));
     space(content, 8);
-    content.addView(text("Small rewards for noticing your world.", 16, MUTED, false));
-    Set<String> kinds = new HashSet<>(),
-        areas = new HashSet<>(),
-        months = new HashSet<>(),
-        days = new HashSet<>();
-    int small = 0;
-    boolean early = false, evening = false;
-    for (Observation r : records) {
-      kinds.add(r.category());
-      if (r.hasGps())
-        areas.add(
-            String.format(
-                Locale.US,
-                "%.2f,%.2f",
-                r.data.optDouble("latitude"),
-                r.data.optDouble("longitude")));
-      String day = r.data.optString("localDate");
-      days.add(day);
-      if (day.length() >= 7) months.add(day.substring(0, 7));
-      if (r.category().equals("bugs") || r.category().equals("fungi")) small++;
-      early |= r.data.optInt("localHour") < 9;
-      evening |= r.data.optInt("localHour") >= 17;
+    content.addView(
+        text(
+            earned.size() + " permanent achievements · " + badges.size() + " little challenges",
+            15,
+            MUTED,
+            false));
+    content.addView(
+        text(
+            "Explore, notice and keep memories. Earned badges stay yours when photos are archived.",
+            14,
+            MUTED,
+            false));
+    space(content, 12);
+    if (level < 5) {
+      int next = Achievements.THRESHOLDS[level + 1];
+      content.addView(
+          text(
+              (next - earned.size())
+                  + " more achievements reveal "
+                  + Achievements.LEVELS[level + 1]
+                  + ".",
+              15,
+              FOREST,
+              true));
+      ProgressBar progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+      progress.setMax(next);
+      progress.setProgress(earned.size());
+      content.addView(progress);
     }
-    long botanics =
-        species().values().stream()
-            .filter(r -> r.category().equals("plants") || r.category().equals("flowers"))
-            .count();
-    String[] names = {
-      "First wonder",
-      "A little of everything",
-      "Botanical beginnings",
-      "Small worlds",
-      "New corners",
-      "Through the seasons",
-      "Early bird",
-      "Curious collector"
-    };
-    String[] descriptions = {
-      "Save your very first discovery.",
-      "Notice four different kinds of things.",
-      "Meet five plant or flower species.",
-      "Photograph five bugs or fungi.",
-      "Make discoveries in three different areas.",
-      "Collect discoveries in four different months.",
-      "Save a discovery before 9 am.",
-      "Get to know twenty different species."
-    };
-    int[] goals = {1, 4, 5, 5, 3, 4, 1, 20},
-        progress =
-            {
-              records.size(),
-              kinds.size(),
-              (int) botanics,
-              small,
-              areas.size(),
-              months.size(),
-              early ? 1 : 0,
-              species().size()
-            };
-    space(content, 22);
-    for (int i = 0; i < names.length; i++) {
+    HorizontalScrollView tiers = new HorizontalScrollView(this);
+    tiers.setHorizontalScrollBarEnabled(false);
+    LinearLayout tierRow = row();
+    for (int i = 0; i < 6; i++) {
+      final int n = i;
+      TextView chip =
+          button(
+              (i <= level ? "" : "🔒 ") + Achievements.LEVELS[i],
+              i == achievementLayer,
+              () -> {
+                if (n > level)
+                  message(
+                      "This layer opens after " + Achievements.THRESHOLDS[n] + " achievements.");
+                else {
+                  achievementLayer = n;
+                  earnedOnly = false;
+                  renderMilestones();
+                }
+              });
+      tierRow.addView(chip, new LinearLayout.LayoutParams(-2, dp(52)));
+    }
+    tiers.addView(tierRow);
+    space(content, 16);
+    content.addView(tiers);
+    space(content, 12);
+    content.addView(
+        button(
+            earnedOnly ? "Show this layer’s challenges" : "View all earned badges",
+            false,
+            () -> {
+              earnedOnly = !earnedOnly;
+              renderMilestones();
+            }));
+    space(content, 16);
+    content.addView(
+        title(
+            earnedOnly ? "Yours to keep" : Achievements.LEVELS[achievementLayer] + " discoveries",
+            25,
+            FOREST));
+    space(content, 12);
+    for (Achievements.Badge b : badges) {
+      boolean won = earned.containsKey(b.id);
+      if (earnedOnly ? !won : b.layer != achievementLayer) continue;
       LinearLayout tile = column();
-      pad(tile, 22);
-      tile.setBackground(shape(progress[i] >= goals[i] ? 0xffe6efd5 : 0xffeef1e9, 20));
-      tile.addView(text((progress[i] >= goals[i] ? "✓ " : "") + names[i], 20, FOREST, true));
+      pad(tile, 17);
+      tile.setBackground(shape(won ? 0xffe6efd5 : 0xfff3ede2, 18));
+      LinearLayout line = row();
+      line.addView(
+          new IconView(this, won ? "milestones" : "leaf", won ? FOREST : 0xffa98b4b),
+          new LinearLayout.LayoutParams(dp(32), dp(32)));
+      TextView name = text(b.name, 18, FOREST, true);
+      name.setPadding(dp(10), 0, 0, 0);
+      line.addView(name, new LinearLayout.LayoutParams(0, -2, 1));
+      tile.addView(line);
       space(tile, 8);
-      tile.addView(text(descriptions[i], 15, MUTED, false));
-      space(tile, 12);
-      ProgressBar bar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
-      bar.setMax(goals[i]);
-      bar.setProgress(Math.min(progress[i], goals[i]));
-      bar.setProgressTintList(android.content.res.ColorStateList.valueOf(FOREST));
-      tile.addView(bar);
-      tile.addView(text(Math.min(progress[i], goals[i]) + " / " + goals[i], 12, MUTED, false));
+      tile.addView(text(b.description, 14, MUTED, false));
+      if (won) {
+        space(tile, 8);
+        tile.addView(
+            text(
+                "✓ Earned · " + dateLabel(earned.get(b.id)) + " · Yours to keep",
+                12,
+                FOREST,
+                true));
+      } else {
+        ProgressBar bar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        bar.setMax(b.goal);
+        bar.setProgress(b.progress);
+        bar.setProgressTintList(android.content.res.ColorStateList.valueOf(FOREST));
+        tile.addView(bar);
+        tile.addView(text(b.progress + " / " + b.goal, 12, MUTED, false));
+      }
       content.addView(tile);
-      space(content, 14);
+      space(content, 12);
     }
     body.addView(scroll(content), new FrameLayout.LayoutParams(-1, -1));
   }
@@ -1288,7 +1359,10 @@ public final class LauncherActivity extends AppCompatActivity {
   private void community(String mode, String id) {
     leaveCapture();
     startActivity(
-        new Intent(this, CommunityActivity.class).putExtra("mode", mode).putExtra("id", id));
+        new Intent(this, CommunityActivity.class)
+            .putExtra("mode", mode)
+            .putExtra("id", id)
+            .putExtra("returnToAccount", screen.equals("account")));
   }
 
   private void showMap() {
@@ -1312,83 +1386,345 @@ public final class LauncherActivity extends AppCompatActivity {
   }
 
   private void showAccount() {
+    leaveCapture();
+    screen = "account";
+    frame(false, true);
     JSONObject user = repo.session.get();
-    if (user == null) {
-      new AlertDialog.Builder(this)
-          .setTitle("Your journal settings")
-          .setItems(
+    LinearLayout content = column();
+    pad(content, 20);
+    LinearLayout identity = row();
+    AvatarView avatar = new AvatarView(this, TrailPreferences.avatar(this, repo.owner()));
+    avatar.setOnClickListener(v -> editAvatar());
+    avatar.setContentDescription("Change your avatar");
+    identity.addView(avatar, new LinearLayout.LayoutParams(dp(82), dp(82)));
+    LinearLayout who = column();
+    who.setPadding(dp(14), 0, 0, 0);
+    who.addView(
+        title(
+            user == null ? "Your trail space" : user.optString("name", "Your trail space"),
+            26,
+            FOREST));
+    who.addView(text(user == null ? "On this phone" : user.optString("email"), 13, MUTED, false));
+    identity.addView(who, new LinearLayout.LayoutParams(0, -2, 1));
+    content.addView(identity);
+    space(content, 12);
+    accountRow(
+        content, "person", "Your avatar", "Choose a character and make it yours", this::editAvatar);
+    if (user == null)
+      accountRow(
+          content,
+          "person",
+          "Sign in or register",
+          "Sync your journal and join your trail circle",
+          () -> showLogin(false));
+    accountHeading(content, "Your community");
+    accountRow(
+        content,
+        "person",
+        "Profile & privacy",
+        "Username, avatar and how friends find you",
+        () -> community("settings", ""));
+    accountRow(
+        content,
+        "person",
+        "Friends & contacts",
+        "Find members and view followed journals",
+        () -> community("people", ""));
+    accountRow(
+        content,
+        "share",
+        "Published photos",
+        "Manage sharing, publish all or unpublish all",
+        () -> community("published", ""));
+    accountRow(
+        content,
+        "bookmark",
+        "Places for later",
+        "Saved discoveries to visit",
+        () -> community("saved", ""));
+    accountHeading(content, "Your journal");
+    syncStatus = text(syncDescription(), 13, MUTED, false);
+    content.addView(syncStatus);
+    accountRow(
+        content, "check", "Sync now", "Upload saved photos and refresh this phone", this::syncNow);
+    accountRow(
+        content,
+        "journal",
+        "Archive",
+        repo.db.listArchive(repo.owner()).size() + " photos tucked away",
+        this::showArchive);
+    accountRow(
+        content,
+        "gallery",
+        "Add an existing photo",
+        "Choose a photo from your phone",
+        () -> gallery.launch(new String[] {"image/*"}));
+    accountRow(
+        content,
+        "share",
+        "Export journal backup",
+        "Your photos, locations and permanent achievements",
+        () -> export.launch("my-trail-log-" + LocalDate.now() + ".json"));
+    accountRow(
+        content,
+        "journal",
+        "Import journal backup",
+        "Bring a saved journal onto this phone",
+        () -> backupImport.launch(new String[] {"application/json", "text/plain"}));
+    accountHeading(content, "App preferences");
+    android.content.SharedPreferences prefs = TrailPreferences.of(this, repo.owner());
+    settingToggle(
+        content,
+        "Weather & time backgrounds",
+        "Light and colours follow the local weather and time of day",
+        prefs,
+        "weatherBackground",
+        true);
+    settingToggle(
+        content,
+        "Subtle weather effects",
+        "A few seconds of rain, snow or wind. Respects reduced motion",
+        prefs,
+        "weatherEffects",
+        true);
+    Switch alerts = new Switch(this);
+    alerts.setText("New photos from people I follow");
+    alerts.setTextColor(FOREST);
+    alerts.setMinHeight(dp(56));
+    alerts.setChecked(prefs.getBoolean("notifications", false));
+    content.addView(alerts);
+    content.addView(
+        text(
+            "Android checks periodically, usually about every 15 minutes. Private photos never"
+                + " trigger an alert.",
+            12,
+            MUTED,
+            false));
+    alerts.setOnCheckedChangeListener(
+        (v, on) -> {
+          prefs
+              .edit()
+              .putBoolean("notifications", on)
+              .putString("noticeSince", Instant.now().toString())
+              .apply();
+          if (on) {
+            if (Build.VERSION.SDK_INT >= 33
+                && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED)
+              notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS);
+            else FollowWorker.schedule(this);
+          }
+        });
+    accountRow(
+        content,
+        "pin",
+        "Location permission",
+        locator.granted()
+            ? "Granted · automatically used for new camera photos"
+            : "Allow location to save where each photo was taken",
+        () -> {
+          if (locator.granted()) {
+            message("Location is already enabled for camera photos.");
+            return;
+          }
+          afterLocation =
+              () -> {
+                showAccount();
+                refreshWeather();
+              };
+          locationPermission.launch(
               new String[] {
-                "Sign in or register",
-                "Archive",
-                "Export journal",
-                "Import web journal backup",
-                "Sources & privacy"
-              },
-              (d, which) -> {
-                if (which == 0) showLogin(false);
-                else if (which == 1) showArchive();
-                else if (which == 2) export.launch("my-trail-log-" + LocalDate.now() + ".json");
-                else if (which == 3)
-                  backupImport.launch(new String[] {"application/json", "text/plain"});
-                else showSources();
-              })
-          .setNegativeButton("Close", null)
-          .show();
+                Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION
+              });
+        });
+    accountHeading(content, "Help & account");
+    accountRow(
+        content,
+        "leaf",
+        "Sources & privacy",
+        "Field guides, map and weather credits",
+        this::showSources);
+    if (user != null) {
+      accountRow(
+          content,
+          "person",
+          "Sign out",
+          "Your saved journal stays on this phone",
+          () ->
+              new AlertDialog.Builder(this)
+                  .setTitle("Sign out?")
+                  .setMessage("Saved photos stay safe. Sign in again to sync.")
+                  .setPositiveButton("Sign out", (d, w) -> async(repo::signOut, this::showJournal))
+                  .setNegativeButton("Cancel", null)
+                  .show());
+      accountRow(
+          content,
+          "close",
+          "Delete account",
+          "Permanently delete this account and its stored photos",
+          this::deleteAccount);
+    }
+    space(content, 20);
+    content.addView(text("My Trail Log · " + BuildConfig.VERSION_NAME, 12, MUTED, false));
+    body.addView(scroll(content), new FrameLayout.LayoutParams(-1, -1));
+  }
+
+  private void accountHeading(LinearLayout content, String label) {
+    space(content, 24);
+    content.addView(title(label, 23, FOREST));
+    space(content, 10);
+  }
+
+  private void accountRow(
+      LinearLayout parent, String icon, String name, String subtitle, Runnable action) {
+    LinearLayout tile = row();
+    tile.setPadding(dp(14), dp(12), dp(14), dp(12));
+    tile.setBackground(ripple(0xffeef1e6, 16));
+    tile.setMinimumHeight(dp(72));
+    tile.setFocusable(true);
+    tile.setContentDescription(name + ". " + subtitle);
+    tile.addView(new IconView(this, icon, FOREST), new LinearLayout.LayoutParams(dp(28), dp(28)));
+    LinearLayout words = column();
+    words.setPadding(dp(14), 0, dp(8), 0);
+    words.addView(text(name, 16, FOREST, true));
+    words.addView(text(subtitle, 12, MUTED, false));
+    tile.addView(words, new LinearLayout.LayoutParams(0, -2, 1));
+    tile.addView(text("›", 24, MUTED, false));
+    tile.setOnClickListener(v -> action.run());
+    parent.addView(tile);
+    space(parent, 8);
+  }
+
+  private void settingToggle(
+      LinearLayout content,
+      String name,
+      String explanation,
+      android.content.SharedPreferences prefs,
+      String key,
+      boolean initial) {
+    Switch toggle = new Switch(this);
+    toggle.setText(name);
+    toggle.setTextColor(FOREST);
+    toggle.setMinHeight(dp(56));
+    toggle.setChecked(prefs.getBoolean(key, initial));
+    toggle.setOnCheckedChangeListener((v, on) -> prefs.edit().putBoolean(key, on).apply());
+    content.addView(toggle);
+    content.addView(text(explanation, 12, MUTED, false));
+  }
+
+  private boolean manualSyncing = false;
+
+  private void syncNow() {
+    if (manualSyncing) return;
+    manualSyncing = true;
+    String owner = repo.owner();
+    if (syncStatus != null) syncStatus.setText("Syncing your journal…");
+    Repository.IO.execute(
+        () -> {
+          String result;
+          try {
+            if (!repo.sync()) repo.enqueue();
+            result = "Journal refreshed. Remaining uploads retry when connected.";
+          } catch (Exception e) {
+            repo.enqueue();
+            result = "Waiting for a connection. Your saved photos are safe.";
+          }
+          manualSyncing = false;
+          String message = result;
+          runOnUiThread(
+              () -> {
+                if (owner.equals(repo.owner()) && screen.equals("account")) {
+                  if (syncStatus != null) syncStatus.setText(syncDescription());
+                  message(message);
+                }
+              });
+        });
+  }
+
+  private String syncDescription() {
+    List<Observation> all = repo.db.list(repo.owner());
+    long pending =
+        all.stream()
+            .filter(r -> r.pending || r.data.optString("analysisState").equals("pending"))
+            .count();
+    return repo.session.get() == null
+        ? "Saved on this phone · sign in to sync"
+        : pending == 0
+            ? "Journal up to date"
+            : pending + " discoveries waiting to sync or identify";
+  }
+
+  private void editAvatar() {
+    AvatarPicker.show(
+        this,
+        TrailPreferences.avatar(this, repo.owner()),
+        value -> {
+          TrailPreferences.avatar(this, repo.owner(), value);
+          repo.enqueue();
+          showAccount();
+        });
+  }
+
+  private void refreshWeather() {
+    if (repo == null
+        || weatherLoading
+        || repo.session.get() == null
+        || !TrailPreferences.of(this, repo.owner()).getBoolean("weatherBackground", true)) return;
+    if (System.currentTimeMillis() - TrailPreferences.of(this, repo.owner()).getLong("weatherAt", 0)
+        < 15 * 60000L) return;
+    if (locator.granted()) {
+      locator.start(
+          location -> {
+            fix = location;
+            fetchWeather(location.getLatitude(), location.getLongitude());
+          });
       return;
     }
-    String[] actions = {
-      "Sync now",
-      "Archive",
-      "Export journal",
-      "Import web journal backup",
-      "Sources & privacy",
-      "Sign out",
-      "Delete account",
-      "Community profile & friends",
-      "My published photos",
-      "Places to check out later"
-    };
-    new AlertDialog.Builder(this)
-        .setTitle(user.optString("name", "Your journal"))
-        .setItems(
-            actions,
-            (d, which) -> {
-              switch (which) {
-                case 0:
-                  repo.enqueue();
-                  message("Uploads queued. Your journal syncs when connected.");
-                  break;
-                case 1:
-                  showArchive();
-                  break;
-                case 2:
-                  export.launch("my-trail-log-" + LocalDate.now() + ".json");
-                  break;
-                case 3:
-                  backupImport.launch(new String[] {"application/json", "text/plain"});
-                  break;
-                case 4:
-                  showSources();
-                  break;
-                case 5:
-                  async(repo::signOut, this::showJournal);
-                  break;
-                case 6:
-                  deleteAccount();
-                  break;
-                case 7:
-                  community("settings", "");
-                  break;
-                case 8:
-                  community("published", "");
-                  break;
-                case 9:
-                  community("saved", "");
-                  break;
-              }
-            })
-        .setNegativeButton("Close", null)
-        .show();
+    for (Observation r : repo.db.listActive(repo.owner()))
+      if (r.hasGps()) {
+        fetchWeather(r.data.optDouble("latitude"), r.data.optDouble("longitude"));
+        break;
+      }
+  }
+
+  private void fetchWeather(double lat, double lon) {
+    if (weatherLoading
+        || System.currentTimeMillis()
+                - TrailPreferences.of(this, repo.owner()).getLong("weatherAt", 0)
+            < 15 * 60000L) return;
+    weatherLoading = true;
+    String owner = repo.owner();
+    JSONObject user = repo.session.get();
+    if (user == null) {
+      weatherLoading = false;
+      return;
+    }
+    Repository.IO.execute(
+        () -> {
+          try {
+            JSONObject weather =
+                repo.api.json(
+                    "/api/weather?lat=" + lat + "&lon=" + lon,
+                    "GET",
+                    user.optString("cookie"),
+                    null);
+            TrailPreferences.of(this, owner)
+                .edit()
+                .putString("weather", weather.toString())
+                .putLong("weatherAt", System.currentTimeMillis())
+                .apply();
+            runOnUiThread(
+                () -> {
+                  if (owner.equals(repo.owner()) && screen.equals("journal")) {
+                    frame(true, true);
+                    renderJournal();
+                  }
+                });
+          } catch (Exception ignored) {
+          } finally {
+            weatherLoading = false;
+          }
+        });
   }
 
   private void archiveRecord(Observation record, boolean archive) {
@@ -1636,6 +1972,17 @@ public final class LauncherActivity extends AppCompatActivity {
             () -> openReference("https://github.com/idorunning/Fieldlogger")));
     section(
         content,
+        "Weather & postcode search",
+        "Local weather uses coarse Open-Meteo forecasts. Sunrise and sunset guide the background"
+            + " light. UK postcodes use Postcodes.io; other place searches use Photon. Forecasts"
+            + " are approximate and no continuous background location is requested.");
+    content.addView(
+        button("Open-Meteo attribution", false, () -> openReference("https://open-meteo.com/")));
+    space(content, 10);
+    content.addView(button("Postcodes.io", false, () -> openReference("https://postcodes.io/")));
+    space(content, 16);
+    section(
+        content,
         "Photo credits",
         "Woodland photograph by Rob Wingate · Unsplash. Your journal uses your own photographs.");
     body.addView(scroll(content), new FrameLayout.LayoutParams(-1, -1));
@@ -1673,6 +2020,10 @@ public final class LauncherActivity extends AppCompatActivity {
             rows.put(item);
           }
           Observation.put(backup, "observations", rows);
+          JSONObject achievements = new JSONObject();
+          for (Map.Entry<String, String> b : repo.db.earned(owner).entrySet())
+            Observation.put(achievements, b.getKey(), b.getValue());
+          Observation.put(backup, "achievements", achievements);
           try (OutputStream out = getContentResolver().openOutputStream(uri, "wt")) {
             if (out == null) throw new IOException("Could not open the backup destination.");
             out.write(backup.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));

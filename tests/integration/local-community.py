@@ -26,6 +26,11 @@ try:
   db.execute("INSERT INTO publications(observation_id,owner_id,status,audience,snapshot,photo_key,generation,centre_lat,centre_lon,radius_km,reason,created_at,updated_at) VALUES(?,?,'published',?,?,?,'local-fixture',51.75,-1.25,5,'',?,?)",(id,owner['id'],audience,json.dumps(snapshot),key,now,now));db.commit()
  allid,privateid,localid=ids;token=uuid.uuid4().hex+uuid.uuid4().hex
  db.execute('INSERT INTO publication_recipients(id,observation_id,generation,email,token_hash) VALUES(?,?,?,?,?)',(str(uuid.uuid4()),privateid,'local-fixture',friend['email'],hashlib.sha256(token.encode()).hexdigest()));db.commit()
+ avatar={'skin':6,'hair':4,'cut':10,'eyes':2,'expression':3,'glasses':1,'presentation':0,'pose':1,'outfit':5}
+ req(a,'PUT','social/avatar',avatar);checked('avatar persists privately and appears on public username',req(a,'GET','social/me')['profile']['avatar']==avatar and req(b,'GET','social/photos/'+allid)['photo']['author']['avatar']==avatar)
+ req(a,'PUT','social/avatar',{'skin':99},400)
+ ledger={'achievements':[{'badge':'calendar-12-25','earnedAt':now}]};req(a,'PUT','social/achievements',ledger);req(a,'PUT','social/achievements',ledger);checked('permanent achievement sync is idempotent and private',len(req(a,'GET','social/achievements')['achievements'])==1 and not req(b,'GET','social/achievements')['achievements'])
+ checked('map photo text filter and notification since filter',len(req(b,'GET','social/feed?scope=everyone&query=robin')['photos'])==1 and not req(b,'GET','social/feed?scope=everyone&query=oak')['photos'] and not req(b,'GET','social/feed?scope=following&since=2099-01-01T00:00:00Z')['photos'])
  checked('only everyone visible without centre or invite',len(req(b,'GET','social/feed?scope=everyone')['photos'])==1)
  for who in [b,c]:req(who,'GET','social/photos/'+privateid,status=404);req(who,'GET','social/photos/'+localid+'/photo',status=404)
  req(c,'POST','social/invite',{'token':token},404)
@@ -46,6 +51,9 @@ try:
  req(c,'POST','social/photos/'+allid+'/report',{'reason':'people','detail':'QA report'});req(b,'GET','social/photos/'+allid+'/photo',status=404);checked('report immediately hides saved shared photo',not req(b,'GET','social/feed?scope=saved')['photos'])
  req(a,'DELETE','social/photos/'+privateid+'/publish');req(b,'GET','social/photos/'+privateid+'/photo',status=404);req(b,'POST','social/invite',{'token':token},404);checks.append('unpublish invalidates photos and old invitations')
  req(a,'POST','social/photos/'+localid+'/publish',{'audience':'everyone','revision':1,'agree':True},503);checks.append('publishing fails closed without service credential')
+ epoch=req(a,'GET','social/me')['bulkEpoch'];req(a,'POST','social/unpublish-all',{'confirm':False},400);req(a,'POST','social/unpublish-all',{'confirm':True});checked('unpublish all advances cancellation epoch and retains private photos',req(a,'GET','social/me')['bulkEpoch']>epoch and len(req(a,'GET','observations')['observations'])==3)
+ req(a,'POST','social/photos/'+localid+'/publish',{'audience':'everyone','revision':1,'agree':True,'bulkEpoch':epoch},409);checked('cancelled bulk batch cannot restart publication',True)
+ checked('all shared photos unavailable after unpublish-all',not req(b,'GET','social/feed?scope=everyone&lat=51.75&lon=-1.25')['photos'])
  print(json.dumps({'passed':len(checks),'checks':checks},indent=2))
 finally:
  for s,u,p in clients:

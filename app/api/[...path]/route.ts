@@ -1,4 +1,5 @@
 import { reversePlace } from "@/lib/place-server";
+import { mapSearch,weather } from "@/lib/outdoors";
 import { z } from "zod";
 import {
   bindings,
@@ -175,6 +176,8 @@ async function handle(request: Request) {
     const user = await getUser(request);
     if (!user) return json({ error: "Sign in to sync your journal." }, 401);
     if (path[0] === "social") return await community(request,path.slice(1),user);
+    if (path[0] === "map-search" && request.method === "GET") return await mapSearch(request);
+    if (path[0] === "weather" && request.method === "GET") return await weather(request);
     if (path[0] === "account" && request.method === "DELETE") {
       if (request.headers.get("origin") !== new URL(request.url).origin)
         return json({ error: "Open your account in My Trail Log to delete it." }, 403);

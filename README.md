@@ -72,10 +72,12 @@ The web app must load online once before it can reopen offline. The native Andro
 
 ## Next gate
 
-Test the signed Android release on the user's phone, including camera/GPS and offline reopening. The deployed provider, image storage, and identification pipeline have passed live checks. Android version 2.2.0 implements native screens, camera, storage and background uploads; see `docs/ANDROID.md`. The Android project now targets `com.field.logger`; see [docs/ANDROID.md](docs/ANDROID.md) for release signing, rebuild and Play Console instructions.
+Test the signed Android release on the user's phone, including camera/GPS and offline reopening. The deployed provider, image storage, and identification pipeline have passed live checks. Android version 2.3.0 implements native screens, camera, storage and background uploads; see `docs/ANDROID.md`. The Android project now targets `com.field.logger`; see [docs/ANDROID.md](docs/ANDROID.md) for release signing, rebuild and Play Console instructions.
 
 ## Native Android app
 
-The Android source in `android/` now builds My Trail Log 2.2.0 as a native app. It uses CameraX, app-private SQLite/photo storage and WorkManager rather than launching Chrome. It connects to the existing account and identification APIs; the web application remains separately implemented. See [native release and migration instructions](docs/ANDROID.md).
+The Android source in `android/` now builds My Trail Log 2.3.0 as a native app. It uses CameraX, app-private SQLite/photo storage and WorkManager rather than launching Chrome. It connects to the existing account and identification APIs; the web application remains separately implemented. See [native release and migration instructions](docs/ANDROID.md).
 
 Community sharing, default service access and moderation are documented in [docs/COMMUNITY.md](docs/COMMUNITY.md), including the shared GPT-6.1 Sol service and verified privacy controls.
+
+Native 2.3.0 adds permanent woodland achievement layers, editable illustrated avatars, organised member settings, reviewed contact matching, periodic follower notifications, postcode/tree/map-area filters, one-off bulk sharing and weather/time-of-day woodland treatments. See docs/COMMUNITY.md for privacy rules and background timing.

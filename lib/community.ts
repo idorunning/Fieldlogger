@@ -12,6 +12,10 @@ export async function limitAction(key:string,maximum:number,ms:number) {
   return !!row;
 }
 const uuid=z.string().uuid();
+const avatarSchema=z.object({skin:z.number().int().min(0).max(7).default(0),hair:z.number().int().min(0).max(7).default(0),cut:z.number().int().min(0).max(11).default(0),eyes:z.number().int().min(0).max(4).default(0),expression:z.number().int().min(0).max(5).default(0),glasses:z.number().int().min(0).max(3).default(0),presentation:z.number().int().min(0).max(2).default(0),pose:z.number().int().min(0).max(2).default(0),outfit:z.number().int().min(0).max(7).default(0)}).strict();
+function avatar(value:unknown){try{return avatarSchema.parse(JSON.parse(String(value||'{}')));}catch{return avatarSchema.parse({});}}
+function categoryMatches(s:any,category:string){return category==='trees'? /\b(oak|beech|pine|birch|willow|ash|holly|hazel|sycamore|yew|rowan|chestnut|maple|alder|tree|cedar|elm|spruce|fir|larch)\b/i.test(String(s.name)+' '+String(s.scientificName)):s.category===category;}
+
 const centre=(u:URL)=>{
   const lat=u.searchParams.has('lat')?Number(u.searchParams.get('lat')):null,lon=u.searchParams.has('lon')?Number(u.searchParams.get('lon')):null;
   if(lat===null&&lon===null)return {lat,lon};
@@ -20,10 +24,10 @@ const centre=(u:URL)=>{
 };
 async function profile(id:string) {
   await database().prepare('INSERT OR IGNORE INTO profiles(user_id,username,discoverable) VALUES(?,?,0)').bind(id,'trail_'+id.replaceAll('-','').slice(0,12)).run();
-  return (await database().prepare('SELECT user_id,username,discoverable,terms_at FROM profiles WHERE user_id=?').bind(id).first<any>())!;
+  return (await database().prepare('SELECT user_id,username,discoverable,terms_at,avatar FROM profiles WHERE user_id=?').bind(id).first<any>())!;
 }
 function select(viewer:Viewer) {
-  return {sql:`SELECT p.*,pr.username,
+  return {sql:`SELECT p.*,pr.username,pr.avatar,
   (SELECT count(*) FROM acorns a WHERE a.observation_id=p.observation_id) AS acorns,
   EXISTS(SELECT 1 FROM acorns a WHERE a.observation_id=p.observation_id AND a.user_id=?) AS liked,
   EXISTS(SELECT 1 FROM saved_places s WHERE s.observation_id=p.observation_id AND s.user_id=?) AS saved,
@@ -38,7 +42,7 @@ async function row(id:string,viewer:Viewer) {
 function readable(p:Row,viewer:Viewer,url:URL){return canReadPublication(p,viewer.id,{blocked:!!p.blocked,invited:!!p.invited,...centre(url)});}
 function photoDTO(p:Row,viewer:Viewer,url:URL) {
   const at=centre(url),params=at.lat===null?'':`?lat=${at.lat}&lon=${at.lon}`;
-  return {id:p.observation_id,author:{id:p.owner_id,username:p.username},...JSON.parse(p.snapshot),acorns:Number(p.acorns),acorned:!!p.liked,checkLater:!!p.saved,following:!!p.following,audience:p.audience,own:p.owner_id===viewer.id,photoUrl:`/api/social/photos/${p.observation_id}/photo${params}`};
+  return {id:p.observation_id,author:{id:p.owner_id,username:p.username,avatar:avatar(p.avatar)},publishedAt:p.updated_at,...JSON.parse(p.snapshot),acorns:Number(p.acorns),acorned:!!p.liked,checkLater:!!p.saved,following:!!p.following,audience:p.audience,own:p.owner_id===viewer.id,photoUrl:`/api/social/photos/${p.observation_id}/photo${params}`};
 }
 export async function decorateOwnRecords(userId:string) {
   const rows=await database().prepare(`SELECT o.data,o.id,p.status,p.audience,p.reason,
@@ -63,9 +67,10 @@ export async function removePublicFiles(userId:string) {
     cursor=page.truncated?page.cursor:undefined;
   } while(cursor);
 }
-const publicationInput=z.object({audience:z.enum(['everyone','local','people']),emails:z.array(z.string().trim().email().max(254).transform(s=>s.toLowerCase())).max(30).default([]),latitude:z.number().min(-90).max(90).nullable().optional(),longitude:z.number().min(-180).max(180).nullable().optional(),radiusKm:z.number().min(.5).max(100).optional(),revision:z.number().int().positive(),agree:z.literal(true)});
+const publicationInput=z.object({audience:z.enum(['everyone','local','people']),emails:z.array(z.string().trim().email().max(254).transform(s=>s.toLowerCase())).max(30).default([]),latitude:z.number().min(-90).max(90).nullable().optional(),longitude:z.number().min(-180).max(180).nullable().optional(),radiusKm:z.number().min(.5).max(100).optional(),bulkEpoch:z.number().int().nonnegative().optional(),revision:z.number().int().positive(),agree:z.literal(true)});
 async function publish(request:Request,id:string,viewer:Viewer) {
   const input=publicationInput.parse(await request.json());
+  if(input.bulkEpoch!==undefined){const epoch=await database().prepare('SELECT reset_at FROM auth_attempts WHERE key=?').bind('bulk-generation:'+viewer.id).first<{reset_at:number}>();if(input.bulkEpoch!==(epoch?.reset_at||0))return json({error:'Bulk publishing was cancelled.'},409);}
   if(!await limitAction('publish:'+viewer.id,10,60000))return json({error:'Please wait a minute before publishing more photos.'},429);
   const own=await database().prepare('SELECT data,photo_key FROM observations WHERE id=? AND user_id=?').bind(id,viewer.id).first<{data:string;photo_key:string}>();
   if(!own)return json({error:'Save and upload this photo first.'},404);
@@ -93,7 +98,7 @@ async function publish(request:Request,id:string,viewer:Viewer) {
       const token=randomToken();invitations.push({email,url:new URL('/invite?token='+token,request.url).toString()});
       writes.push(database().prepare('INSERT INTO publication_recipients(id,observation_id,generation,email,token_hash) VALUES(?,?,?,?,?)').bind(crypto.randomUUID(),id,generation,email,await digest(token)));
     }
-    writes.push(database().prepare("UPDATE publications SET status='published',photo_key=?,updated_at=? WHERE observation_id=? AND generation=? AND status='checking'").bind(publicKey,new Date().toISOString(),id,generation));
+    writes.push(database().prepare("UPDATE publications SET status='published',photo_key=?,updated_at=? WHERE observation_id=? AND generation=? AND status='checking' AND (? IS NULL OR COALESCE((SELECT reset_at FROM auth_attempts WHERE key=?),0)=?)").bind(publicKey,new Date().toISOString(),id,generation,input.bulkEpoch??null,'bulk-generation:'+viewer.id,input.bulkEpoch??null));
     const results=await database().batch(writes);
     if(!results.at(-1)?.meta.changes){await bindings().BUCKET.delete(publicKey);return json({error:'Publishing was cancelled. This photo is private.'},409);}
     if(old?.photo_key&&old.photo_key!==publicKey)await bindings().BUCKET.delete(old.photo_key);
@@ -108,29 +113,47 @@ export async function community(request:Request,path:string[],viewer:Viewer):Pro
   if(method!=='GET'&&request.headers.get('origin')!==url.origin)return json({error:'Open My Trail Log to make this change.'},403);
   const me=await profile(viewer.id);
   if(part==='me'){
-    if(method==='GET')return json({profile:{id:viewer.id,username:me.username,discoverable:!!me.discoverable,termsAccepted:!!me.terms_at,isModerator:viewer.id===bindings().COMMUNITY_ADMIN_USER_ID}});
+    if(method==='GET')return json({bulkEpoch:(await database().prepare('SELECT reset_at FROM auth_attempts WHERE key=?').bind('bulk-generation:'+viewer.id).first<{reset_at:number}>())?.reset_at||0,profile:{id:viewer.id,username:me.username,avatar:avatar(me.avatar),discoverable:!!me.discoverable,termsAccepted:!!me.terms_at,isModerator:viewer.id===bindings().COMMUNITY_ADMIN_USER_ID}});
     if(method==='PUT'){
-      const input=z.object({username:z.string().trim().regex(/^[a-zA-Z][a-zA-Z0-9_]{2,24}$/).transform(s=>s.toLowerCase()),discoverable:z.boolean()}).parse(await request.json());
+      const input=z.object({username:z.string().trim().regex(/^[a-zA-Z][a-zA-Z0-9_]{2,24}$/).transform(s=>s.toLowerCase()),discoverable:z.boolean(),avatar:avatarSchema.optional()}).parse(await request.json());
       const taken=await database().prepare('SELECT user_id FROM profiles WHERE username=? AND user_id<>?').bind(input.username,viewer.id).first();if(taken)return json({error:'That username is taken. Try another.'},409);
-      await database().prepare('UPDATE profiles SET username=?,discoverable=? WHERE user_id=?').bind(input.username,input.discoverable?1:0,viewer.id).run();return json({ok:true});
+      await database().prepare('UPDATE profiles SET username=?,discoverable=?,avatar=? WHERE user_id=?').bind(input.username,input.discoverable?1:0,JSON.stringify(input.avatar||avatar(me.avatar)),viewer.id).run();return json({ok:true});
     }
+  }
+  if(part==='avatar'&&method==='PUT'){
+    const input=avatarSchema.parse(await request.json());await database().prepare('UPDATE profiles SET avatar=? WHERE user_id=?').bind(JSON.stringify(input),viewer.id).run();return json({avatar:input});
+  }
+  if(part==='achievements'){
+    if(method==='PUT'){
+      const input=z.object({achievements:z.array(z.object({badge:z.string().regex(/^[a-z0-9 -]{1,80}$/),earnedAt:z.string().datetime()})).max(500)}).parse(await request.json());
+      const now=new Date().toISOString();
+      if(input.achievements.length)await database().batch(input.achievements.map(a=>database().prepare('INSERT OR IGNORE INTO achievement_unlocks(user_id,badge,earned_at) VALUES(?,?,?)').bind(viewer.id,a.badge,a.earnedAt>now?now:a.earnedAt)));
+    }
+    if(method==='GET'||method==='PUT')return json({achievements:(await database().prepare('SELECT badge,earned_at AS earnedAt FROM achievement_unlocks WHERE user_id=?').bind(viewer.id).all()).results});
+  }
+  if(part==='unpublish-all'&&method==='POST'){
+    const input=z.object({confirm:z.literal(true)}).parse(await request.json());
+    await database().prepare('INSERT INTO auth_attempts(key,count,reset_at) VALUES(?,0,?) ON CONFLICT(key) DO UPDATE SET reset_at=MAX(reset_at+1,excluded.reset_at)').bind('bulk-generation:'+viewer.id,Date.now()).run();
+    const files=(await database().prepare('SELECT photo_key FROM publications WHERE owner_id=? AND photo_key IS NOT NULL').bind(viewer.id).all<{photo_key:string}>()).results;
+    await database().prepare("UPDATE publications SET status=CASE WHEN status='removed' THEN status ELSE 'unpublished' END,generation=?,updated_at=? WHERE owner_id=?").bind(randomToken(),new Date().toISOString(),viewer.id).run();
+    await removePublicFiles(viewer.id);return json({ok:true,count:files.length});
   }
   if(part==='contacts'&&method==='POST'){
     if(!await limitAction('contacts:'+viewer.id,10,60000))return json({error:'Please wait a minute before searching again.'},429);
     const input=z.object({emails:z.array(z.string().trim().email().transform(s=>s.toLowerCase())).min(1).max(30)}).parse(await request.json());
     const found=[];
     for(const email of [...new Set(input.emails)]){
-      const person=await database().prepare(`SELECT pr.user_id AS id,pr.username,EXISTS(SELECT 1 FROM follows f WHERE f.follower_id=? AND f.following_id=pr.user_id) AS following FROM profiles pr JOIN users u ON u.id=pr.user_id WHERE u.email=? AND pr.discoverable=1 AND pr.user_id<>? AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id=? AND b.blocked_id=pr.user_id) OR (b.blocked_id=? AND b.blocker_id=pr.user_id))`).bind(viewer.id,email,viewer.id,viewer.id,viewer.id).first();if(person)found.push(person);
+      const person=await database().prepare(`SELECT pr.user_id AS id,pr.username,pr.avatar,EXISTS(SELECT 1 FROM follows f WHERE f.follower_id=? AND f.following_id=pr.user_id) AS following FROM profiles pr JOIN users u ON u.id=pr.user_id WHERE u.email=? AND pr.discoverable=1 AND pr.user_id<>? AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id=? AND b.blocked_id=pr.user_id) OR (b.blocked_id=? AND b.blocker_id=pr.user_id))`).bind(viewer.id,email,viewer.id,viewer.id,viewer.id).first();if(person)found.push(person);
     }
     return json({users:found});
   }
   if(part==='users'){
     if(!id&&method==='GET'){
       const query=(url.searchParams.get('query')||'').trim().toLowerCase().slice(0,25),following=url.searchParams.get('following')==='true';
-      const list=await database().prepare(`SELECT pr.user_id AS id,pr.username,EXISTS(SELECT 1 FROM follows f WHERE f.follower_id=? AND f.following_id=pr.user_id) AS following FROM profiles pr WHERE pr.user_id<>? AND instr(pr.username,?)>0 AND (?=0 OR EXISTS(SELECT 1 FROM follows f WHERE f.follower_id=? AND f.following_id=pr.user_id)) AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id=? AND b.blocked_id=pr.user_id) OR (b.blocked_id=? AND b.blocker_id=pr.user_id)) ORDER BY pr.username LIMIT 60`).bind(viewer.id,viewer.id,query,following?1:0,viewer.id,viewer.id,viewer.id).all();return json({users:list.results});
+      const list=await database().prepare(`SELECT pr.user_id AS id,pr.username,pr.avatar,EXISTS(SELECT 1 FROM follows f WHERE f.follower_id=? AND f.following_id=pr.user_id) AS following FROM profiles pr WHERE pr.user_id<>? AND instr(pr.username,?)>0 AND (?=0 OR EXISTS(SELECT 1 FROM follows f WHERE f.follower_id=? AND f.following_id=pr.user_id)) AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id=? AND b.blocked_id=pr.user_id) OR (b.blocked_id=? AND b.blocker_id=pr.user_id)) ORDER BY pr.username LIMIT 60`).bind(viewer.id,viewer.id,query,following?1:0,viewer.id,viewer.id,viewer.id).all();return json({users:list.results});
     }
     if(!uuid.safeParse(id).success)return json({error:'User unavailable.'},404);
-    const target=await database().prepare('SELECT user_id AS id,username FROM profiles WHERE user_id=?').bind(id).first();if(!target)return json({error:'User unavailable.'},404);
+    const target=await database().prepare('SELECT user_id AS id,username,avatar FROM profiles WHERE user_id=?').bind(id).first();if(!target)return json({error:'User unavailable.'},404);
     if(action==='follow'&&method==='PUT'){
       const input=z.object({following:z.boolean()}).parse(await request.json());if(id===viewer.id)return json({error:'This is your journal.'},400);
       const blocked=await database().prepare('SELECT 1 FROM blocks WHERE (blocker_id=? AND blocked_id=?) OR (blocker_id=? AND blocked_id=?)').bind(viewer.id,id,id,viewer.id).first();if(blocked)return json({error:'This user is unavailable.'},404);
@@ -157,7 +180,9 @@ export async function community(request:Request,path:string[],viewer:Viewer):Pro
     const q=select(viewer);let rows=(await database().prepare(q.sql+" WHERE p.status='published' ORDER BY p.updated_at DESC").bind(...q.values).all<Row>()).results;
     rows=rows.filter(p=>readable(p,viewer,url)&&(!author||p.owner_id===author)&&(scope!=='following'||!!p.following)&&(scope!=='saved'||!!p.saved)&&(scope!=='invited'||!!p.invited));
     if(at.lat!==null&&at.lon!==null&&!author&&scope==='nearby')rows=rows.filter(p=>{const s=JSON.parse(p.snapshot);return s.latitude!==null&&s.longitude!==null&&distanceKm(at.lat!,at.lon!,s.latitude,s.longitude)<=radius;});
-    const category=url.searchParams.get('category');if(category&&category!=='all')rows=rows.filter(p=>JSON.parse(p.snapshot).category===category);
+    const category=url.searchParams.get('category');if(category&&category!=='all')rows=rows.filter(p=>categoryMatches(JSON.parse(p.snapshot),category));
+    const query=(url.searchParams.get('query')||'').trim().toLowerCase().slice(0,80);if(query)rows=rows.filter(p=>{const s=JSON.parse(p.snapshot);return [s.name,s.scientificName,s.place,s.category].join(' ').toLowerCase().includes(query);});
+    const since=url.searchParams.get('since');if(since){if(!z.string().datetime().safeParse(since).success)return json({error:'Invalid time filter.'},400);rows=rows.filter(p=>p.updated_at>since);}
     if(url.searchParams.get('sort')==='acorns')rows.sort((a,b)=>Number(b.acorns)-Number(a.acorns)||b.updated_at.localeCompare(a.updated_at));
     return json({photos:rows.slice(offset,offset+100).map(p=>photoDTO(p,viewer,url)),hasMore:rows.length>offset+100,nextOffset:offset+100});
   }
