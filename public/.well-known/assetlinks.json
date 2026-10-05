@@ -7,7 +7,8 @@
       "namespace": "android_app",
       "package_name": "com.field.logger",
       "sha256_cert_fingerprints": [
-        "55:3E:82:65:C4:A8:86:04:36:13:DE:23:71:C5:C9:7A:C4:D8:F1:F4:8A:82:28:73:A1:52:BA:0B:08:F5:E7:9A"
+        "55:3E:82:65:C4:A8:86:04:36:13:DE:23:71:C5:C9:7A:C4:D8:F1:F4:8A:82:28:73:A1:52:BA:0B:08:F5:E7:9A",
+        "1E:3D:F4:0B:2D:FA:B4:4D:96:A6:F5:54:00:83:78:B2:02:E2:28:86:7C:5B:83:35:1D:BE:62:BB:5F:19:1C:E2"
       ]
     }
   }

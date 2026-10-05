@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { phoneLayoutScript } from "../lib/phone-layout";
 import "./globals.css";
 import "./photo-ui.css";
 export const metadata: Metadata = {
@@ -21,7 +22,10 @@ export const viewport: Viewport = {
 };
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en-GB">
+    <html lang="en-GB" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: phoneLayoutScript }} />
+      </head>
       <body>{children}</body>
     </html>
   );

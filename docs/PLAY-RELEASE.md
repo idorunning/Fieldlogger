@@ -1,6 +1,6 @@
 # Play Console release preparation
 
-App name: Field Logger. Package: com.field.logger. Release: 1.0.2, version code 3. Minimum SDK: 24, satisfying Play automatic protection's minimum-SDK requirement. Target SDK: 36. Category suggestion: Lifestyle. No advertising, tracking SDK, distance tracking or health measurements. Start with internal testing; no Play submission is authorized in this task.
+App name: Field Logger. Package: com.field.logger. Release: 1.0.3, version code 4. Minimum SDK: 24, satisfying Play automatic protection's minimum-SDK requirement. Target SDK: 36. Category suggestion: Lifestyle. No advertising, tracking SDK, distance tracking or health measurements. Start with internal testing; no Play submission is authorized in this task.
 
 Short description: Photograph and remember the small wonders you find outdoors.
 
@@ -20,4 +20,6 @@ Data safety preparation (verify against your actual published configuration):
 
 The maintainer must select the appropriate Play Console collection/sharing declarations, review current provider terms and complete the console questionnaires. No declaration is pre-submitted by this repository. Reviewer access should use a disposable journal account with no personal discoveries; provide instructions for key-free capture/journal/map features. OpenAI identification requires a valid provider key and is not included as a free service.
 
-Generated phone screenshots are review artifacts. Produce Play screenshots from your release on a real phone, plus a 1024×500 feature graphic if requested by Play. The delivered AAB targets API 36 and contains no native .so libraries. Keep the signing backup private and add Play's app-signing certificate to Digital Asset Links after enrolment.
+Generated phone screenshots are review artifacts. Produce Play screenshots from your release on a real phone, plus a 1024×500 feature graphic if requested by Play. The delivered AAB targets API 36 and contains no native .so libraries. Keep the signing backup private. Digital Asset Links includes both the original APK/upload certificate and the Play app-signing certificate supplied by the owner, so Chrome can verify either installation for the full-screen app.
+
+Play app-signing public SHA-256: `1E:3D:F4:0B:2D:FA:B4:4D:96:A6:F5:54:00:83:78:B2:02:E2:28:86:7C:5B:83:35:1D:BE:62:BB:5F:19:1C:E2`. This is a public certificate fingerprint, not a private signing key. If Play rotates its app-signing key, add the new public fingerprint to `public/.well-known/assetlinks.json` while retaining fingerprints needed for older supported Android versions.

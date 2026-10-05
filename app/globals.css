@@ -195,7 +195,7 @@ small {
   background: #e9eee5;
 }
 .app-shell {
-  min-height: 100vh;
+  min-height: calc(100vh / var(--phone-layout-scale, 1));
 }
 .sidebar {
   width: 240px;
@@ -1285,7 +1285,7 @@ small {
   border: 0;
   padding: 25px;
   border-radius: 20px;
-  max-height: 90dvh;
+  max-height: calc(90dvh / var(--phone-layout-scale, 1));
   width: min(500px, calc(100% - 24px));
   background: var(--paper);
   color: var(--ink);
@@ -1817,7 +1817,7 @@ small {
     margin-left: 42px;
   }
 }
-@media (max-width: 800px) {
+@media (max-width: 800px), (pointer: coarse) and (hover: none) {
   .sidebar {
     display: none;
   }
@@ -1930,7 +1930,7 @@ small {
     left: 50%;
     bottom: 100px;
     width: max-content;
-    max-width: 90vw;
+    max-width: calc(90vw / var(--phone-layout-scale, 1));
     font-size: 13px;
   }
   .overview-stats {
@@ -2125,7 +2125,7 @@ small {
     font-size: 9px;
   }
   .map-panel {
-    height: calc(100dvh - 380px);
+    height: calc(calc(100dvh / var(--phone-layout-scale, 1)) - 380px);
     min-height: 380px;
   }
   .map-count {
@@ -2336,7 +2336,7 @@ small {
   .dialog {
     padding: 21px;
     border-radius: 16px;
-    max-height: 93dvh;
+    max-height: calc(93dvh / var(--phone-layout-scale, 1));
   }
   .dialog-top h2 {
     font-size: 24px;
@@ -2604,7 +2604,7 @@ small {
   flex-shrink: 0;
   padding: 0;
 }
-@media (max-width: 800px) {
+@media (max-width: 800px), (pointer: coarse) and (hover: none) {
   .mobile-nav {
     height: auto;
     min-height: calc(77px + env(safe-area-inset-bottom));

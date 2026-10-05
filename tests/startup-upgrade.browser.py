@@ -1,7 +1,7 @@
 """Regression for first-launch upgrade from a cached blank page.
 
 Build previous live commit cbc0cd9 in a separate checkout. Set OLD_RELEASE_CLIENT
-its dist/client path, and OLD_RELEASE_HTML to its rendered root HTML. The test
+to its dist/client path, and OLD_RELEASE_HTML to its rendered root HTML. The test
 replays that cached shell, then uses the current origin's actual service worker
 to recover and reopen offline, without clearing the IndexedDB note fixture.
 Run with an overall process timeout to detect worker activation deadlocks.
@@ -71,7 +71,7 @@ with sync_playwright() as p:
         else:
             route.continue_()
     context.route(BASE + '/**',serve_previous_cache)
-    page.goto(BASE + '/?app_version=1.0.2',wait_until='domcontentloaded')
+    page.goto(BASE + '/?app_version=1.0.3',wait_until='domcontentloaded')
     page.wait_for_function("window.__registrationFixtureReached && document.body.innerText.length === 0",timeout=15000)
     replay['old_blank_observed'] = True
     print('PASS: cached HTML and JavaScript from the previous release reproduce the blank startup')
@@ -81,7 +81,7 @@ with sync_playwright() as p:
     page.get_by_role('button',name='Journal',exact=True).click()
     expect(page.get_by_role('heading',name='Your field journal')).to_be_visible()
     caches = page.evaluate('caches.keys()')
-    assert 'fieldnotes-shell-v5' in caches and 'fieldnotes-shell-v4' not in caches,caches
+    assert 'fieldnotes-shell-v6' in caches and 'fieldnotes-shell-v4' not in caches,caches
     note = page.evaluate('''() => new Promise(resolve => {
       const open = indexedDB.open('fieldnotes-v1',1);
       open.onsuccess = () => {
@@ -100,10 +100,10 @@ with sync_playwright() as p:
     page.get_by_role('button',name='Journal',exact=True).click()
     expect(page.get_by_role('heading',name='Your field journal')).to_be_visible()
     assert not errors,errors
-    result = {'method':'Replay cached HTML and JavaScript built from previous live commit; install actual production v5 service worker',
+    result = {'method':'Replay cached HTML and JavaScript built from previous live commit; install actual production v6 service worker',
               'previous_source_commit':'cbc0cd9f3bfd6c82ffae17bcafe95975ea49c706',
               'old_blank_screen_reproduced_before_update':replay['old_blank_observed'],
-              'old_v4_cache_replaced_with_v5':True,'first_updated_android_launch_refreshed':True,
+              'old_v4_cache_replaced_with_v6':True,'first_updated_android_launch_refreshed':True,
               'camera_visible':True,'journal_interactive':True,'local_note_preserved':True,
               'repaired_shell_reopens_offline':True,'uncaught_browser_errors':errors}
     (artifacts / 'fieldlogger-startup-upgrade.json').write_text(json.dumps(result,indent=2)+'\n')
